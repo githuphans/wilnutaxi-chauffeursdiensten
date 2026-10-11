@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garagevolgorde</title>
+<style>
+  :root {
+    --bg: #0f1216;
+    --panel: #181d23;
+    --line: #2a313a;
+    --text: #eef2f5;
+    --muted: #93a0ad;
+    --accent: #f5b400;
+    --door: #3fb68b;
+    --warn-bg: #3a2a08;
+    --warn: #ffd166;
+    --plate: #f7c600;
+    --plate-blue: #1d4ea8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; }
+  body { display: flex; flex-direction: column; padding: 2.2vw 2.6vw; gap: 1.8vw; min-height: 100vh; }
+
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 2vw; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: clamp(22px, 3.2vw, 64px); font-weight: 800; letter-spacing: -0.01em; }
+  h1 .dag { color: var(--accent); }
+  .sub { color: var(--muted); font-size: clamp(14px, 1.4vw, 28px); margin-top: .4em; }
+  .klok { font-size: clamp(28px, 4.2vw, 84px); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+
+  .garage { flex: 1; display: grid; grid-template-columns: auto 1fr auto; gap: 1.2vw; align-items: stretch; }
+  .wand, .deur { writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; font-weight: 700;
+    letter-spacing: .25em; text-transform: uppercase; font-size: clamp(12px, 1.2vw, 22px); padding: 1vw .6vw; border-radius: 10px; }
+  .wand { color: var(--muted); border: 2px dashed var(--line); }
+  .deur { color: #06261b; background: var(--door); }
+  .rij { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 1.2vw; }
+
+  .auto { background: var(--panel); border: 2px solid var(--line); border-radius: 18px; padding: 1.6vw 1.4vw;
+    display: flex; flex-direction: column; gap: 1.1vw; position: relative; min-width: 0; }
+  .auto.eerst { border-color: var(--door); box-shadow: 0 0 0 4px rgba(63,182,139,.18) inset; }
+  .stap { display: flex; align-items: center; gap: .8vw; color: var(--muted); font-size: clamp(13px, 1.25vw, 24px); font-weight: 600; }
+  .nr { width: 2.4em; height: 2.4em; border-radius: 50%; display: grid; place-items: center; background: var(--accent);
+    color: #1a1300; font-weight: 900; font-size: clamp(18px, 2vw, 40px); flex: none; }
+  .plaat { display: flex; min-width: 0; align-items: stretch; border-radius: 8px; overflow: hidden; border: 3px solid #111; align-self: flex-start; max-width: 100%; }
+  .plaat .nl { background: var(--plate-blue); color: #fff; font-weight: 800; font-size: clamp(10px, .9vw, 18px);
+    padding: 0 .45em; display: grid; place-items: end center; padding-bottom: .3em; }
+  .plaat .k { background: var(--plate); color: #111; font-weight: 900; font-size: clamp(22px, 2.3vw, 48px);
+    padding: .1em .35em; letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .naam { color: var(--muted); font-size: clamp(14px, 1.3vw, 26px); min-height: 1.2em; }
+  .rit { margin-top: auto; border-top: 1px solid var(--line); padding-top: 1vw; }
+  .rit .label { color: var(--muted); font-size: clamp(12px, 1.05vw, 20px); text-transform: uppercase; letter-spacing: .08em; }
+  .rit .tijd { font-size: clamp(34px, 4.6vw, 96px); font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .rit .route { font-size: clamp(14px, 1.4vw, 28px); overflow-wrap: anywhere; min-height: 2.5em; }
+  .rit .meer { color: var(--muted); font-size: clamp(12px, 1.1vw, 22px); margin-top: .3em; min-height: 2.5em; }
+  .geen .tijd { color: var(--muted); font-size: clamp(22px, 2.6vw, 52px); }
+
+  .meldingen { display: flex; flex-direction: column; gap: .6vw; }
+  .melding { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: .8vw 1.2vw; font-size: clamp(14px, 1.35vw, 26px); }
+  footer { color: var(--muted); font-size: clamp(12px, 1vw, 18px); display: flex; justify-content: space-between; gap: 1em; flex-wrap: wrap; }
+  .fout { color: #ff8a80; }
+
+  @media (max-width: 760px) {
+    .rit .route, .rit .meer { min-height: 0; }
+    body { padding: 16px; gap: 16px; }
+    .garage { grid-template-columns: 1fr; }
+    .wand, .deur { writing-mode: horizontal-tb; transform: none; padding: 8px; }
+    .rij { grid-auto-flow: row; grid-auto-columns: auto; gap: 12px; }
+    .auto { padding: 16px; gap: 10px; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Inrijvolgorde <span class="dag" id="dag">…</span></h1>
+      <div class="sub">Rij de garage in van <b>1</b> naar <b id="laatste">4</b>. De laatste staat bij de deur en vertrekt als eerste.</div>
+    </div>
+    <div class="klok" id="klok">--:--</div>
+  </header>
+
+  <main class="garage">
+    <div class="wand">Achterwand</div>
+    <div class="rij" id="rij"></div>
+    <div class="deur">Deur</div>
+  </main>
+
+  <section class="meldingen" id="meldingen"></section>
+  <footer><span id="status">Laden…</span><span>Wilnu Taxi · gegevens uit taxiID</span></footer>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  const apiUrl = "/api/garage?" + new URLSearchParams([...params].filter(([k]) => ["t", "datum"].includes(k))).toString();
+  const REFRESH_MS = 2 * 60 * 1000;
+  const el = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmt = new Intl.DateTimeFormat("nl-NL", { timeZone: "Europe/Amsterdam", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+  function tick() { el("klok").textContent = fmt.format(new Date()); }
+  setInterval(tick, 10000); tick();
+
+  function render(d) {
+    const vandaag = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date());
+    el("dag").textContent = (d.dag === vandaag ? "vandaag, " : "voor ") + d.dagLabel;
+    const auto = d.inrijvolgorde;
+    el("laatste").textContent = auto.length;
+    el("rij").innerHTML = auto.map((c, i) => {
+      const r = c.eersteRit;
+      const stap = i === 0 ? "Als eerste erin · achteraan" : i === auto.length - 1 ? "Als laatste erin · bij de deur" : "Daarna erin";
+      const ritHtml = r
+        ? `<div class="label">Eerste rit</div>
+           <div class="tijd">${esc(r.tijd)}</div>
+           <div class="route">${esc(r.van || "?")} → ${esc(r.naar || "?")}</div>
+           <div class="meer">${c.aantalRitten} ${c.aantalRitten === 1 ? "rit" : "ritten"}${r.vlucht ? " · vlucht " + esc(r.vlucht) : ""}${r.chauffeur ? "" : " · nog geen chauffeur"}</div>`
+        : `<div class="label">Eerste rit</div><div class="tijd">geen rit</div><div class="route"></div><div class="meer"></div>`;
+      return `<article class="auto ${i === auto.length - 1 && r ? "eerst" : ""} ${r ? "" : "geen"}">
+        <div class="stap"><span class="nr">${c.inrijden}</span><span>${stap}</span></div>
+        <div class="plaat"><span class="nl">NL</span><span class="k">${esc(c.kenteken || "onbekend")}</span></div>
+        <div class="naam">${esc(c.naam || (c.bekend ? "" : "id " + c.vehicleId.slice(-6)))}</div>
+        <div class="rit">${ritHtml}</div>
+      </article>`;
+    }).join("");
+    el("meldingen").innerHTML = d.waarschuwingen.map((w) => `<div class="melding">⚠ ${esc(w)}</div>`).join("");
+    el("status").textContent = "Bijgewerkt " + fmt.format(new Date()) + " · taxiID opgehaald " + fmt.format(new Date(d.taxiIdOpgehaald)) + " · ververst elke 2 minuten";
+    el("status").className = "";
+  }
+
+  async function load() {
+    try {
+      const res = await fetch(apiUrl, { cache: "no-store" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.fout || "HTTP " + res.status);
+      render(d);
+    } catch (err) {
+      el("status").textContent = "Kon niet bijwerken (" + err.message + "), nieuwe poging over 2 minuten. Laatste stand blijft staan.";
+      el("status").className = "fout";
+    }
+  }
+  load();
+  setInterval(load, REFRESH_MS);
+  // Elke nacht om 03:00 de hele pagina herladen (geheugen, nieuwe versie).
+  setInterval(() => { if (fmt.format(new Date()) === "03:00") location.reload(); }, 60000);
+</script>
+</body>
+</html>

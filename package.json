@@ -1,0 +1,18 @@
+{
+  "name": "wilnutaxi-chauffeursdiensten",
+  "version": "0.1.0",
+  "description": "Garagevolgorde-scherm en Telegram-vluchtbot voor de chauffeurs van Wilnu Taxi (leest taxiID, alleen lezen).",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/*.test.js",
+    "garage": "node scripts/garage-proef.js",
+    "vlucht": "node scripts/vlucht-proef.js"
+  },
+  "engines": { "node": ">=20.0.0" },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": { "dotenv": "^16.4.5" }
+}

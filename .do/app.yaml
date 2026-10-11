@@ -1,0 +1,53 @@
+# DigitalOcean App Platform-spec voor de chauffeursdiensten (garagescherm +
+# vluchtbot). Los van het boekingsformulier. Geheime waarden staan hier
+# BEWUST niet in; die vul je in via het dashboard (type SECRET).
+#
+# Vervang <github-gebruiker>/<repo> door de nieuwe repository.
+# instance_count MOET 1 blijven: twee exemplaren van de bot halen elkaars
+# Telegram-berichten weg en volgen elke vlucht dubbel.
+name: wilnutaxi-chauffeursdiensten
+region: ams
+services:
+  - name: web
+    github:
+      repo: <github-gebruiker>/<repo>
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    build_command: npm install --omit=dev
+    run_command: npm start
+    environment_slug: node-js
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    http_port: 3000
+    health_check:
+      http_path: /api/health
+    envs:
+      - key: PORT
+        value: "3000"
+      - key: TAXIID_COMPANY_ID
+        value: 5e76134226a257e34bd9bb17
+      - key: TAXIID_PROD_API_KEY
+        type: SECRET
+      - key: GARAGE_TOKEN
+        type: SECRET
+      - key: TELEGRAM_BOT_TOKEN
+        type: SECRET
+      - key: BOT_TOEGANGSCODE
+        type: SECRET
+      - key: BOT_BEHEER_CHAT_IDS
+        value: ""
+      - key: AERODATABOX_API_KEY
+        type: SECRET
+      - key: AERODATABOX_UNITS_PER_CALL
+        value: "2"
+      - key: FLIGHT_DAILY_UNITS
+        value: "300"
+      - key: SPACES_KEY
+        type: SECRET
+      - key: SPACES_SECRET
+        type: SECRET
+      - key: SPACES_BUCKET
+        value: ""
+      - key: SPACES_REGION
+        value: ams3

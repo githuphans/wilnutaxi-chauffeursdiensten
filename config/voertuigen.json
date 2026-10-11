@@ -1,0 +1,7 @@
+{
+  "_uitleg": "Koppeltabel taxiID-voertuig-id -> kenteken. Vul per id het kenteken en eventueel een korte naam in (bv. 'eSprinter'). Het id vind je in de uitvoer van scripts/garage-proef.js; zoek een van de genoemde ritreferenties op in het taxiID-portaal om te zien welke auto het is.",
+  "689a0b9b21ba4294ebdc1c39": { "kenteken": "??-???-?", "naam": "" },
+  "68c9fa1ca0b35e67cd36a5f9": { "kenteken": "??-???-?", "naam": "" },
+  "68cbe04a78c853f526bbdded": { "kenteken": "??-???-?", "naam": "" },
+  "689a0f7521ba4294ebdc1c7e": { "kenteken": "??-???-?", "naam": "" }
+}
