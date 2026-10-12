@@ -74,15 +74,15 @@
   <header>
     <div>
       <h1>Inrijvolgorde <span class="dag" id="dag">…</span></h1>
-      <div class="sub">Rij de garage in van <b>1</b> naar <b id="laatste">4</b>. De laatste staat bij de deur en vertrekt als eerste.</div>
+      <div class="sub">De auto bij de deur vertrekt als eerste. Rij de garage in op volgorde: eerst <b>1</b>, als laatste <b id="laatste">3</b>.</div>
     </div>
     <div class="klok" id="klok">--:--</div>
   </header>
 
   <main class="garage">
-    <div class="wand">Achterwand</div>
+    <div class="deur" id="kantA">Deur</div>
     <div class="rij" id="rij"></div>
-    <div class="deur">Deur</div>
+    <div class="wand" id="kantB">Achterwand</div>
   </main>
 
   <section class="meldingen" id="meldingen"></section>
@@ -92,6 +92,14 @@
   const params = new URLSearchParams(location.search);
   const apiUrl = "/api/garage?" + new URLSearchParams([...params].filter(([k]) => ["t", "datum"].includes(k))).toString();
   const REFRESH_MS = 2 * 60 * 1000;
+  // Standaard zit de deur links (de auto die het eerst weg moet staat links).
+  // Met ?deur=rechts in de link staat de deur rechts.
+  const DEUR_RECHTS = params.get("deur") === "rechts";
+  if (DEUR_RECHTS) {
+    const a = document.getElementById("kantA"), b = document.getElementById("kantB");
+    a.className = "wand"; a.textContent = "Achterwand";
+    b.className = "deur"; b.textContent = "Deur";
+  }
   const el = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmt = new Intl.DateTimeFormat("nl-NL", { timeZone: "Europe/Amsterdam", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -104,7 +112,9 @@
     el("dag").textContent = (d.dag === vandaag ? "vandaag, " : "voor ") + d.dagLabel;
     const auto = d.inrijvolgorde;
     el("laatste").textContent = auto.length;
-    el("rij").innerHTML = auto.map((c, i) => {
+    const volgorde = DEUR_RECHTS ? auto : [...auto].reverse();
+    el("rij").innerHTML = volgorde.map((c) => {
+      const i = auto.indexOf(c);
       const r = c.eersteRit;
       const stap = i === 0 ? "Als eerste erin · achteraan" : i === auto.length - 1 ? "Als laatste erin · bij de deur" : "Daarna erin";
       const ritHtml = r

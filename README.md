@@ -26,6 +26,7 @@ alleen ritreferentie, tijd, plaatsnaam en vluchtnummer.
 - Het scherm ververst elke 2 minuten (taxiID wordt hooguit elke 5 minuten
   gevraagd). Bij een storing blijft de laatste stand staan met een melding.
 - Een andere dag bekijken: `/?datum=2026-10-13`.
+- De deur staat links, met de auto die het eerst weg moet ernaast. Deur rechts: zet `&deur=rechts` achter de link.
 
 **Vluchtbot**
 - Eerste keer: de chauffeur stuurt de toegangscode (`BOT_TOEGANGSCODE`).
