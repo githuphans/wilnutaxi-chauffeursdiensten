@@ -10,6 +10,7 @@
 import "dotenv/config";
 import { createTaxiIdClient } from "../src/taxiid.js";
 import { computeGarageOrder } from "../src/garage.js";
+import { cityOf, isCanceled } from "../src/taxiid.js";
 import { loadVehicles } from "../src/vehicles.js";
 
 const day = process.argv[2];
@@ -32,3 +33,12 @@ console.table(
   }))
 );
 for (const w of r.waarschuwingen) console.log(`! ${w}`);
+
+// Ritten waar ook uit het adres geen plaats te halen is: toon alleen de VELDNAMEN (geen waarden).
+const zonderPlaats = rides.filter((x) => !isCanceled(x) && (!cityOf(x.departure) || !cityOf(x.destination)));
+if (zonderPlaats.length) {
+  console.log(`\n${zonderPlaats.length} rit(ten) zonder herkenbare plaats. Veldnamen (geen waarden):`);
+  for (const x of zonderPlaats.slice(0, 5)) {
+    console.log(`- ${x.reference}: vertrek [${Object.keys(x.departure ?? {}).join(", ")}], aankomst [${Object.keys(x.destination ?? {}).join(", ")}]`);
+  }
+}

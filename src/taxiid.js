@@ -121,6 +121,37 @@ export function startsAtAirport(ride) {
   return texts.some((t) => AIRPORT_RE.test(t));
 }
 
+/**
+ * Plaatsnaam van een vertrek- of aankomstpunt. taxiID vult `city` niet
+ * altijd; dan halen we de plaats uit een adresregel zoals
+ * "Zilvermeeuwhof 10, Nuenen, Nederland" of "Torenallee 20, 5617 BC Eindhoven, Nederland".
+ * Alleen de plaatsnaam komt in de uitvoer, nooit straat of huisnummer.
+ */
+const LAND = /^(nederland|netherlands|the netherlands|nl|belgi[eë]|belgium|belgique|deutschland|germany|duitsland|france|frankrijk)$/i;
+const CITY_KEYS = ["city", "locality", "town", "place", "municipality", "plaats"];
+export function cityOf(place) {
+  if (!place || typeof place !== "object") return null;
+  for (const k of CITY_KEYS) {
+    const v = place[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  const strings = [];
+  (function walk(v, depth) {
+    if (depth > 2 || v === null || v === undefined) return;
+    if (typeof v === "string") strings.push(v);
+    else if (typeof v === "object" && !Array.isArray(v)) Object.values(v).forEach((x) => walk(x, depth + 1));
+  })(place, 0);
+  for (const text of strings) {
+    const parts = text.split(",").map((x) => x.trim()).filter(Boolean);
+    if (parts.length < 2) continue;
+    while (parts.length > 1 && LAND.test(parts.at(-1))) parts.pop();
+    if (parts.length < 2) continue;
+    const candidate = parts.at(-1).replace(/^\d{4}\s?[A-Z]{2}\s+/, "").replace(/^\d{4,5}\s+/, "").trim();
+    if (candidate && !/\d/.test(candidate) && candidate.length <= 40) return candidate;
+  }
+  return null;
+}
+
 /** Alleen de velden die we nodig hebben -- geen namen, telefoonnummers of adressen. */
 export function safeRide(ride) {
   return {
@@ -131,8 +162,8 @@ export function safeRide(ride) {
     vehicleId: ride.vehicleId ?? null,
     hasDriver: Boolean(ride.driverId || ride.driver),
     flightNumber: ride.flightNumber ?? null,
-    from: ride.departure?.city ?? null,
+    from: cityOf(ride.departure),
     fromAirport: startsAtAirport(ride),
-    to: ride.destination?.city ?? null,
+    to: cityOf(ride.destination),
   };
 }

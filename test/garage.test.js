@@ -60,3 +60,13 @@ test("luchthaven herkennen aan het vertrekpunt", () => {
   assert.equal(startsAtAirport({ departure: { city: "Amstelveen" } }), false);
   assert.equal(startsAtAirport({}), false);
 });
+
+import { cityOf } from "../src/taxiid.js";
+test("plaatsnaam uit het adres als city ontbreekt", () => {
+  assert.equal(cityOf({ city: "Nuenen" }), "Nuenen");
+  assert.equal(cityOf({ city: "", address: "Zilvermeeuwhof 10, Nuenen, Nederland" }), "Nuenen");
+  assert.equal(cityOf({ formattedAddress: "Torenallee 20, 5617 BC Eindhoven, Nederland" }), "Eindhoven");
+  assert.equal(cityOf({ description: "Frankenlaan 5, 6419 BT Heerlen, Nederland" }), "Heerlen");
+  assert.equal(cityOf({ address: "Luchthavenweg 25" }), null);
+  assert.equal(cityOf(null), null);
+});
