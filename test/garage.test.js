@@ -41,7 +41,7 @@ test("ritten zonder auto en onbekende voertuigen geven een waarschuwing", () => 
   const r = computeGarageOrder(rides, V, { nowMs: now });
   assert.equal(r.zonderAuto.length, 1);
   assert.match(r.waarschuwingen[0], /1 rit heeft nog geen auto \(eerste om 06:00\)/);
-  assert.ok(r.waarschuwingen.some((w) => w.includes("Onbekend voertuig-id X")));
+  assert.ok(r.waarschuwingen.some((w) => w.includes("voertuig-id X niet gevonden")));
   assert.equal(r.inrijvolgorde.at(-1).vehicleId, "X");
 });
 
@@ -86,4 +86,24 @@ test("twee voertuig-id's met hetzelfde kenteken worden één kaart", () => {
   assert.equal(r.inrijvolgorde[2].aantalRitten, 2);
   assert.deepEqual(r.inrijvolgorde[2].vehicleIds.sort(), ["G1", "G2"]);
   assert.equal(r.waarschuwingen.length, 0);
+});
+
+import { resolveVehicles } from "../src/vehicles.js";
+import { createTaxiIdClient } from "../src/taxiid.js";
+test("onbekend voertuig-id wordt in taxiID opgezocht (en gecachet)", async () => {
+  let calls = 0;
+  const fetchImpl = async (url) => {
+    calls++;
+    assert.match(url, /\/vehicles\/NEW$/);
+    return { ok: true, status: 200, json: async () => ({ id: "NEW", licensePlate: "ggz-37-r", brand: "BYD", model: "Atto 3", driverId: "geheim" }) };
+  };
+  const client = createTaxiIdClient({ apiKey: "x", fetchImpl, log: { warn() {} } });
+  const table = { OLD: { kenteken: "GGZ-37-R", naam: "BYD Atto 3" } };
+  const rides = [{ vehicleId: "NEW", status: "assigned" }, { vehicleId: "OLD", status: "assigned" }, { vehicleId: "GONE", status: "canceled" }];
+  const v = await resolveVehicles(table, rides, client);
+  assert.deepEqual(v.NEW, { kenteken: "GGZ-37-R", naam: "BYD Atto 3" });
+  assert.ok(!JSON.stringify(v).includes("geheim"));
+  assert.equal(v.GONE, undefined);
+  await resolveVehicles(table, rides, client);
+  assert.equal(calls, 1);
 });

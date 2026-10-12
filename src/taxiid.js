@@ -95,7 +95,39 @@ export function createTaxiIdClient({
     return inFlight;
   }
 
-  return { getUpcomingRides, fetchRidesBetween };
+  /**
+   * Eén voertuig opzoeken: GET /vehicles/<id> geeft o.a. licensePlate, brand
+   * en model (getest op 12-10-2026). Alleen kenteken en merk/model worden
+   * bewaard, niet de chauffeur. Gevonden: 24 uur in de cache, fout: 15 min.
+   */
+  const vehicleCache = new Map();
+  async function getVehicle(id) {
+    const hit = vehicleCache.get(id);
+    if (hit && hit.expiresAt > now()) return hit.value;
+    let value = null;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      const res = await fetchImpl(`${baseUrl}/vehicles/${encodeURIComponent(id)}`, {
+        headers: { Authorization: apiKey, "Content-Type": "application/json" },
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
+      if (res.ok) {
+        const v = await res.json();
+        const kenteken = String(v?.formattedLicensePlate || v?.licensePlate || "").trim().toUpperCase() || null;
+        const naam = [v?.brand, v?.model].filter((x) => typeof x === "string" && x.trim()).join(" ") || null;
+        value = kenteken ? { kenteken, naam } : null;
+      } else {
+        log.warn?.(`Voertuig ${id} opzoeken in taxiID: HTTP ${res.status}`);
+      }
+    } catch (err) {
+      log.warn?.(`Voertuig ${id} opzoeken in taxiID mislukt: ${err.message}`);
+    }
+    vehicleCache.set(id, { value, expiresAt: now() + (value ? 24 * 3600000 : 15 * 60000) });
+    return value;
+  }
+
+  return { getUpcomingRides, fetchRidesBetween, getVehicle };
 }
 
 export function isCanceled(ride) {

@@ -111,7 +111,7 @@ export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 1
     );
   }
   for (const c of inrijvolgorde.filter((c) => !c.bekend)) {
-    waarschuwingen.push(`Onbekend voertuig-id ${c.vehicleId}: zet het kenteken in config/voertuigen.json.`);
+    waarschuwingen.push(`Kenteken van voertuig-id ${c.vehicleId} niet gevonden in taxiID. Zet het in config/voertuigen.json.`);
   }
 
   return {

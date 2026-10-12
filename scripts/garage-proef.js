@@ -11,12 +11,12 @@ import "dotenv/config";
 import { createTaxiIdClient } from "../src/taxiid.js";
 import { computeGarageOrder } from "../src/garage.js";
 import { cityOf, isCanceled } from "../src/taxiid.js";
-import { loadVehicles } from "../src/vehicles.js";
+import { loadVehicles, resolveVehicles } from "../src/vehicles.js";
 
 const day = process.argv[2];
 const client = createTaxiIdClient();
 const { rides } = await client.getUpcomingRides();
-const vehicles = loadVehicles();
+const vehicles = await resolveVehicles(loadVehicles(), rides, client);
 const r = computeGarageOrder(rides, vehicles, { nowMs: Date.now(), day, switchHour: Number(process.env.GARAGE_WISSELUUR ?? 12) });
 
 console.log(`\nInrijvolgorde voor ${r.dagLabel} (${rides.length} ritten opgehaald rond nu):\n`);
