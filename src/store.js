@@ -29,14 +29,15 @@ export function createStore({ env = process.env, log = console } = {}) {
   const spaces =
     env.SPACES_KEY && env.SPACES_SECRET && env.SPACES_BUCKET && env.SPACES_REGION
       ? createSpacesClient({
-          accessKeyId: env.SPACES_KEY,
-          secretAccessKey: env.SPACES_SECRET,
-          bucket: env.SPACES_BUCKET,
-          region: env.SPACES_REGION,
-          endpoint: env.SPACES_ENDPOINT || `https://${env.SPACES_REGION}.digitaloceanspaces.com`,
+          accessKeyId: String(env.SPACES_KEY).trim(),
+          secretAccessKey: String(env.SPACES_SECRET).trim(),
+          bucket: String(env.SPACES_BUCKET).trim().replace(/^https?:\/\//, "").split(".")[0],
+          region: String(env.SPACES_REGION).trim().toLowerCase(),
+          endpoint: env.SPACES_ENDPOINT || `https://${String(env.SPACES_REGION).trim().toLowerCase()}.digitaloceanspaces.com`,
         })
       : null;
   const key = env.SPACES_STATE_KEY || "chauffeursdiensten/state.json";
+  if (spaces) log.info?.(`Spaces: bucket "${String(env.SPACES_BUCKET).trim()}", regio "${String(env.SPACES_REGION).trim()}".`);
   const file = env.STATE_FILE || DEFAULT_FILE;
 
   async function load() {

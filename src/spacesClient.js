@@ -5,6 +5,19 @@
  */
 import { createHash, createHmac } from "node:crypto";
 
+/** S3-foutcode uit het antwoord (bv. AccessDenied, SignatureDoesNotMatch, InvalidAccessKeyId, NoSuchBucket). */
+async function s3Reason(res) {
+  const text = await res.text().catch(() => "");
+  const code = /<Code>([^<]+)<\/Code>/.exec(text)?.[1];
+  const uitleg = {
+    AccessDenied: "de sleutel heeft geen toegang tot deze Space (beperkte sleutel voor een andere Space, of zonder schrijfrecht)",
+    SignatureDoesNotMatch: "het secret klopt niet, of SPACES_REGION hoort niet bij deze Space",
+    InvalidAccessKeyId: "SPACES_KEY bestaat niet (verkeerd overgenomen of verwijderd)",
+    NoSuchBucket: "SPACES_BUCKET bestaat niet in deze regio",
+  }[code];
+  return code ? `${code}${uitleg ? `: ${uitleg}` : ""}` : `status ${res.status}`;
+}
+
 const sha256Hex = (d) => createHash("sha256").update(d ?? "", "utf8").digest("hex");
 const hmac = (k, d) => createHmac("sha256", k).update(d, "utf8").digest();
 const awsUriEncode = (s) => encodeURIComponent(s).replace(/[!*'()]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
@@ -35,12 +48,12 @@ export function createSpacesClient({ accessKeyId, secretAccessKey, bucket, regio
     async getObject(key) {
       const res = await signedRequest({ ...base, method: "GET", key, body: "" });
       if (res.status === 404) return null;
-      if (!res.ok) throw new Error(`Spaces GET "${key}" gaf status ${res.status}`);
+      if (!res.ok) throw new Error(`Spaces GET "${key}" gaf ${res.status} (${await s3Reason(res)})`);
       return res.text();
     },
     async putObject(key, contents, contentType = "application/json") {
       const res = await signedRequest({ ...base, method: "PUT", key, body: contents, contentType });
-      if (!res.ok) throw new Error(`Spaces PUT "${key}" gaf status ${res.status}`);
+      if (!res.ok) throw new Error(`Spaces PUT "${key}" gaf ${res.status} (${await s3Reason(res)})`);
     },
   };
 }
