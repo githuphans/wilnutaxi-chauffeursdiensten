@@ -38,23 +38,38 @@ export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 1
     })
     .sort((a, b) => Date.parse(a.requestedDate) - Date.parse(b.requestedDate));
 
-  const perVehicle = new Map();
-  for (const id of Object.keys(vehicles)) perVehicle.set(id, []);
+  // Eén kaart per fysieke auto: taxiID kan voor dezelfde auto meerdere
+  // voertuig-id's hebben (bv. per chauffeur). Id's met hetzelfde kenteken
+  // worden samengevoegd; een id zonder kenteken telt als eigen auto.
+  const carKey = (id) => {
+    const k = vehicles[id]?.kenteken;
+    return k ? `k:${k.replace(/[^A-Z0-9]/gi, "").toUpperCase()}` : `id:${id}`;
+  };
+  const perCar = new Map(); // key -> { ids: Set, rides: [] }
+  const ensure = (id) => {
+    const key = carKey(id);
+    if (!perCar.has(key)) perCar.set(key, { ids: new Set(), rides: [] });
+    perCar.get(key).ids.add(id);
+    return perCar.get(key);
+  };
+  for (const id of Object.keys(vehicles)) ensure(id);
   const zonderAuto = [];
   for (const r of dayRides) {
     if (!r.vehicleId) {
       zonderAuto.push(r);
       continue;
     }
-    if (!perVehicle.has(r.vehicleId)) perVehicle.set(r.vehicleId, []);
-    perVehicle.get(r.vehicleId).push(r);
+    ensure(r.vehicleId).rides.push(r);
   }
 
-  const cars = [...perVehicle.entries()].map(([vehicleId, list]) => {
+  const cars = [...perCar.values()].map(({ ids, rides: list }) => {
+    list.sort((a, b) => Date.parse(a.requestedDate) - Date.parse(b.requestedDate));
+    const vehicleId = [...ids][0];
     const info = vehicles[vehicleId];
     const first = list[0] ?? null;
     return {
       vehicleId,
+      vehicleIds: [...ids],
       kenteken: info?.kenteken ?? null,
       naam: info?.naam ?? null,
       bekend: Boolean(info),

@@ -70,3 +70,20 @@ test("plaatsnaam uit het adres als city ontbreekt", () => {
   assert.equal(cityOf({ address: "Luchthavenweg 25" }), null);
   assert.equal(cityOf(null), null);
 });
+
+test("twee voertuig-id's met hetzelfde kenteken worden één kaart", () => {
+  const V2 = { G1: { kenteken: "GGZ-37-R", naam: "BYD Atto 3" }, G2: { kenteken: "GGZ-37-R", naam: "BYD Atto 3" }, N: { kenteken: "GNP-46-F", naam: null }, H: { kenteken: "GHN-49-K", naam: null } };
+  const rides = [
+    ride("G2", "2026-10-13T02:00:00Z"), // 04:00
+    ride("G2", "2026-10-13T06:30:00Z"),
+    ride("N", "2026-10-13T14:00:00Z"), // 16:00
+    ride("H", "2026-10-13T11:30:00Z"), // 13:30
+  ];
+  const r = computeGarageOrder(rides, V2, { nowMs: Date.parse("2026-10-12T12:00:00Z") });
+  assert.equal(r.inrijvolgorde.length, 3);
+  assert.deepEqual(r.inrijvolgorde.map((c) => c.kenteken), ["GNP-46-F", "GHN-49-K", "GGZ-37-R"]);
+  assert.equal(r.inrijvolgorde[2].eersteRit.tijd, "04:00");
+  assert.equal(r.inrijvolgorde[2].aantalRitten, 2);
+  assert.deepEqual(r.inrijvolgorde[2].vehicleIds.sort(), ["G1", "G2"]);
+  assert.equal(r.waarschuwingen.length, 0);
+});

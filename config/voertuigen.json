@@ -1,5 +1,5 @@
 {
-  "_uitleg": "Koppeltabel taxiID-voertuig-id -> kenteken (3 auto's). Gekoppeld op 11 oktober 2026 via de ritreferenties van 12 oktober. Komt er een auto bij, voeg dan zijn voertuig-id en kenteken toe; een onbekend id verschijnt vanzelf als waarschuwing op het scherm.",
+  "_uitleg": "Koppeltabel taxiID-voertuig-id -> kenteken. Eén auto kan in taxiID meerdere voertuig-id's hebben (GGZ-37-R heeft er twee); id's met hetzelfde kenteken worden op het scherm samengevoegd tot één kaart. Gekoppeld via de ritreferenties van 12 en 13 oktober 2026. Een onbekend id verschijnt vanzelf als waarschuwing.",
   "689a0b9b21ba4294ebdc1c39": {
     "kenteken": "GGZ-37-R",
     "naam": "BYD Atto 3"
@@ -10,6 +10,10 @@
   },
   "68cbe04a78c853f526bbdded": {
     "kenteken": "GHN-49-K",
+    "naam": "BYD Atto 3"
+  },
+  "689a0f7521ba4294ebdc1c7e": {
+    "kenteken": "GGZ-37-R",
     "naam": "BYD Atto 3"
   }
 }
