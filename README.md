@@ -32,6 +32,11 @@ alleen ritreferentie, tijd, plaatsnaam en vluchtnummer.
 - Daarna: `KL1234` → de bot zoekt een taxiID-rit met dat vluchtnummer en
   neemt die dag; is er geen rit, dan morgen. Een andere dag: `KL1234 vandaag`
   of `KL1234 13-10`. Vrije schrijfwijzen werken (`hv6474`, `FR 1718`, `OS 7`).
+- Alleen voor **ophaalritten vanaf een luchthaven**: begint de gevonden
+  taxiID-rit niet op een luchthaven, of landt de vlucht niet op een van de
+  `THUIS_LUCHTHAVENS`, dan weigert de bot de aanmelding.
+- Alleen vluchten waar een chauffeur zich voor heeft aangemeld worden
+  gecontroleerd; er wordt niets automatisch gevolgd.
 - `/mijn` laat de stand zien, `/stop KL1234` stopt (zonder nummer: alles).
 - Beheer (alleen `BOT_BEHEER_CHAT_IDS`): `/gebruik` (units vandaag),
   `/chauffeurs`, `/verwijder <chat-id>`. Iedereen: `/id` geeft je chat-id.

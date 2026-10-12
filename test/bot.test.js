@@ -20,7 +20,8 @@ function setup({ legsByCall } = {}) {
     async getUpcomingRides() {
       return {
         rides: [
-          { reference: "WNT-77", requestedDate: "2026-10-12T10:00:00Z", status: "assigned", flightNumber: "kl 1234", departure: { city: "Eindhoven" }, destination: { city: "Nuenen" }, customer: { name: "Geheim" } },
+          { reference: "WNT-77", requestedDate: "2026-10-12T10:00:00Z", status: "assigned", flightNumber: "kl 1234", departure: { city: "Eindhoven", name: "Eindhoven Airport" }, destination: { city: "Nuenen" }, customer: { name: "Geheim" } },
+          { reference: "WNT-88", requestedDate: "2026-10-12T05:00:00Z", status: "assigned", flightNumber: "FR 1718", departure: { city: "Nuenen", address: "Dorpsstraat 1" }, destination: { city: "Eindhoven", name: "Eindhoven Airport" } },
         ],
       };
     },
@@ -89,4 +90,19 @@ test("onbekende vlucht en stoppen", async () => {
   await s.msg("wnt2026");
   assert.match(await s.msg("XY999 13-10"), /vind vlucht XY999 niet/);
   assert.match(await s.msg("/stop"), /geen vluchten/);
+});
+
+test("rit die niet op een luchthaven begint: geen updates en geen aanroep", async () => {
+  const s = setup({ legsByCall: [[leg()]] });
+  await s.msg("wnt2026");
+  assert.match(await s.msg("FR1718"), /WNT-88 om 07:00 .* begint niet op een luchthaven/);
+  assert.equal(s.calls.length, 0);
+});
+
+test("vlucht die vertrekt vanaf onze luchthaven wordt niet gevolgd", async () => {
+  const out = leg({ from: { iata: "EIN", city: "Eindhoven" }, to: { iata: "PMI", city: "Palma" } });
+  const s = setup({ legsByCall: [[out]] });
+  await s.msg("wnt2026");
+  assert.match(await s.msg("HV5000 morgen"), /landt niet op een luchthaven waar wij ophalen \(EIN → PMI\)/);
+  assert.equal(s.state.subscriptions.length, 0);
 });

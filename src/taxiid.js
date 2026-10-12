@@ -102,6 +102,25 @@ export function isCanceled(ride) {
   return String(ride?.status ?? "").toLowerCase().includes("cancel");
 }
 
+/**
+ * Begint de rit op een luchthaven? taxiID geeft niet altijd een plaatsnaam,
+ * dus we kijken in alle tekst van het vertrekpunt (naam, synoniem, adres):
+ * "Eindhoven Airport", "Luchthavenweg 25", "Schiphol", "Flughafen Weeze", ...
+ */
+const AIRPORT_RE = /airport|luchthaven|schiphol|flughafen|a[ée]roport|aeropuerto|\b(EIN|AMS|RTM|BRU|CRL|DUS|NRN|CGN|MST|LGG)\b/i;
+export function startsAtAirport(ride) {
+  const dep = ride?.departure;
+  if (!dep) return false;
+  const texts = [];
+  (function walk(v, depth) {
+    if (depth > 3 || v === null || v === undefined) return;
+    if (typeof v === "string") texts.push(v);
+    else if (Array.isArray(v)) v.forEach((x) => walk(x, depth + 1));
+    else if (typeof v === "object") Object.values(v).forEach((x) => walk(x, depth + 1));
+  })(dep, 0);
+  return texts.some((t) => AIRPORT_RE.test(t));
+}
+
 /** Alleen de velden die we nodig hebben -- geen namen, telefoonnummers of adressen. */
 export function safeRide(ride) {
   return {
@@ -113,6 +132,7 @@ export function safeRide(ride) {
     hasDriver: Boolean(ride.driverId || ride.driver),
     flightNumber: ride.flightNumber ?? null,
     from: ride.departure?.city ?? null,
+    fromAirport: startsAtAirport(ride),
     to: ride.destination?.city ?? null,
   };
 }

@@ -50,3 +50,13 @@ test("geen persoonsgegevens in de uitvoer", () => {
   const out = JSON.stringify(computeGarageOrder(rides, V, { nowMs: now }));
   assert.ok(!out.includes("Jansen") && !out.includes("0612") && !out.includes("Dorpsstraat"));
 });
+
+import { startsAtAirport } from "../src/taxiid.js";
+test("luchthaven herkennen aan het vertrekpunt", () => {
+  assert.equal(startsAtAirport({ departure: { name: "Eindhoven Airport" } }), true);
+  assert.equal(startsAtAirport({ departure: { address: "Luchthavenweg 25", city: "Eindhoven" } }), true);
+  assert.equal(startsAtAirport({ departure: { description: "Flughafen Weeze" } }), true);
+  assert.equal(startsAtAirport({ departure: { address: "Heikampen 21", city: "Nuenen" } }), false);
+  assert.equal(startsAtAirport({ departure: { city: "Amstelveen" } }), false);
+  assert.equal(startsAtAirport({}), false);
+});

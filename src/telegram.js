@@ -59,7 +59,7 @@ export function createTelegram({ token = process.env.TELEGRAM_BOT_TOKEN, fetchIm
 }
 
 export const HELP = [
-  "Zo werkt het:",
+  "Zo werkt het (alleen voor ritten die op een luchthaven beginnen):",
   "• Stuur je vluchtnummer, bv. KL1234. Ik zoek de rit in taxiID en kies die dag; anders morgen.",
   "• Andere dag? KL1234 vandaag, of KL1234 13-10.",
   "• /mijn: welke vluchten je volgt en de laatste stand",

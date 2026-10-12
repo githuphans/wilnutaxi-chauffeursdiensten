@@ -69,9 +69,10 @@ export function createTracker({
           if (!Number.isFinite(t) || t < nowMs - 2 * HOUR) return false;
           return date ? amsterdamYmd(t) === date : t < nowMs + 48 * HOUR;
         })
-        .sort((a, b) => Date.parse(a.requestedDate) - Date.parse(b.requestedDate));
+        // Ophaalritten vanaf een luchthaven eerst; daarbinnen de vroegste.
+        .sort((a, b) => Number(b.fromAirport) - Number(a.fromAirport) || Date.parse(a.requestedDate) - Date.parse(b.requestedDate));
       const r = matches[0];
-      return r ? { referentie: r.reference, tijd: hhmm(r.requestedDate), iso: r.requestedDate, van: r.from, naar: r.to } : null;
+      return r ? { referentie: r.reference, tijd: hhmm(r.requestedDate), iso: r.requestedDate, van: r.from, naar: r.to, vanafLuchthaven: r.fromAirport } : null;
     } catch (err) {
       log.warn?.(`Rit zoeken in taxiID mislukt: ${err.message}`);
       return null;
@@ -90,6 +91,10 @@ export function createTracker({
     const today = amsterdamYmd(nowMs);
     let date = extractDate(text, today);
     const rit = await findRide(flight, date, nowMs);
+    // Alleen ritten die op een luchthaven beginnen (ophalen na de landing).
+    if (rit && !rit.vanafLuchthaven) {
+      return `Rit ${rit.referentie} om ${rit.tijd} met vlucht ${flight} begint niet op een luchthaven. Vluchtupdates zijn alleen voor ophaalritten vanaf het vliegveld.`;
+    }
     if (!date) date = rit ? amsterdamYmd(rit.iso) : addDays(today, 1);
     if (date < addDays(today, -1)) return `De datum ${date} ligt in het verleden.`;
     if (date > addDays(today, 3)) return "Je kunt je tot drie dagen vooruit aanmelden. Meld je later opnieuw aan.";
@@ -122,6 +127,9 @@ export function createTracker({
         return `Ik vind vlucht ${flight} niet op ${dayLabel(date)}. Klopt het nummer en de datum? Stuur bijvoorbeeld: ${flight} 13-10.`;
       }
       const chosen = chooseLeg(res.legs, homeAirports);
+      if (chosen.rol !== "aankomst") {
+        return `Vlucht ${flight} op ${dayLabel(date)} landt niet op een luchthaven waar wij ophalen (${chosen.leg.from.iata ?? "?"} → ${chosen.leg.to.iata ?? "?"}). Vluchtupdates zijn alleen voor ophaalritten na de landing.`;
+      }
       const c = classify(chosen.leg);
       fs = {
         flight,
