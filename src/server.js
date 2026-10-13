@@ -15,7 +15,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createTaxiIdClient } from "./taxiid.js";
 import { computeGarageOrder } from "./garage.js";
-import { loadVehicles, resolveVehicles } from "./vehicles.js";
+import { loadVehicles, resolveVehicles, loadEigenKentekens } from "./vehicles.js";
 import { createStore } from "./store.js";
 import { createAeroDataBox } from "./flights/aerodatabox.js";
 import { createTracker } from "./flights/tracker.js";
@@ -61,7 +61,7 @@ const server = createServer(async (req, res) => {
       }
       const { rides, fetchedAt, stale, error } = await taxiId.getUpcomingRides({ force: url.searchParams.has("vers") });
       const allVehicles = await resolveVehicles(vehicles, rides, taxiId);
-      const result = computeGarageOrder(rides, allVehicles, { nowMs: Date.now(), day, switchHour: SWITCH_HOUR });
+      const result = computeGarageOrder(rides, allVehicles, { nowMs: Date.now(), day, switchHour: SWITCH_HOUR, eigenKentekens: loadEigenKentekens() });
       if (stale) result.waarschuwingen.unshift(`taxiID was niet bereikbaar (${error}); dit is de stand van ${new Date(fetchedAt).toLocaleTimeString("nl-NL", { timeZone: "Europe/Amsterdam", hour: "2-digit", minute: "2-digit" })}.`);
       result.taxiIdOpgehaald = new Date(fetchedAt).toISOString();
       return sendJson(res, 200, result);

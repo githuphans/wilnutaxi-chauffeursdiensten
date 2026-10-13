@@ -107,3 +107,13 @@ test("onbekend voertuig-id wordt in taxiID opgezocht (en gecachet)", async () =>
   await resolveVehicles(table, rides, client);
   assert.equal(calls, 1);
 });
+
+test("alleen eigen auto's in de garage; andere auto's apart vermeld", () => {
+  const V3 = { G: { kenteken: "GGZ-37-R", naam: null }, H: { kenteken: "GHN-49-K", naam: null }, N: { kenteken: "GNP-46-F", naam: null }, Z: { kenteken: "ZD792B", naam: "Bmw 3 gt" } };
+  const rides = [ride("G", "2026-10-14T07:10:00Z"), ride("H", "2026-10-14T11:00:00Z"), ride("Z", "2026-10-14T10:00:00Z"), ride("Z", "2026-10-14T12:00:00Z")];
+  const r = computeGarageOrder(rides, V3, { nowMs: Date.parse("2026-10-13T11:00:00Z"), eigenKentekens: ["GGZ37R", "ghn-49-k", "GNP-46-F"] });
+  assert.deepEqual(r.inrijvolgorde.map((c) => c.kenteken), ["GNP-46-F", "GHN-49-K", "GGZ-37-R"]);
+  assert.deepEqual(r.andereAutos, [{ kenteken: "ZD792B", aantalRitten: 2, eersteRit: "12:00" }]);
+  // zonder lijst: alle auto's (oude gedrag)
+  assert.equal(computeGarageOrder(rides, V3, { nowMs: Date.parse("2026-10-13T11:00:00Z") }).inrijvolgorde.length, 4);
+});

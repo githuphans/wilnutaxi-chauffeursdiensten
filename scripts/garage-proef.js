@@ -11,13 +11,13 @@ import "dotenv/config";
 import { createTaxiIdClient } from "../src/taxiid.js";
 import { computeGarageOrder } from "../src/garage.js";
 import { cityOf, isCanceled } from "../src/taxiid.js";
-import { loadVehicles, resolveVehicles } from "../src/vehicles.js";
+import { loadVehicles, resolveVehicles, loadEigenKentekens } from "../src/vehicles.js";
 
 const day = process.argv[2];
 const client = createTaxiIdClient();
 const { rides } = await client.getUpcomingRides();
 const vehicles = await resolveVehicles(loadVehicles(), rides, client);
-const r = computeGarageOrder(rides, vehicles, { nowMs: Date.now(), day, switchHour: Number(process.env.GARAGE_WISSELUUR ?? 12) });
+const r = computeGarageOrder(rides, vehicles, { nowMs: Date.now(), day, switchHour: Number(process.env.GARAGE_WISSELUUR ?? 12), eigenKentekens: loadEigenKentekens() });
 
 console.log(`\nInrijvolgorde voor ${r.dagLabel} (${rides.length} ritten opgehaald rond nu):\n`);
 console.table(
@@ -33,6 +33,7 @@ console.table(
   }))
 );
 for (const w of r.waarschuwingen) console.log(`! ${w}`);
+if (r.andereAutos.length) console.log(`Niet in de garage (andere auto's): ${r.andereAutos.map((a) => `${a.kenteken} (${a.aantalRitten} rit${a.aantalRitten === 1 ? "" : "ten"}, eerste ${a.eersteRit})`).join(", ")}`);
 
 // Ritten waar ook uit het adres geen plaats te halen is: toon alleen de VELDNAMEN (geen waarden).
 const zonderPlaats = rides.filter((x) => !isCanceled(x) && (!cityOf(x.departure) || !cityOf(x.destination)));

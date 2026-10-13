@@ -24,7 +24,14 @@ export function planDay(nowMs, switchHour = 12) {
  * @param {Record<string,{kenteken:string,naam?:string}>} vehicles  koppeltabel vehicleId -> kenteken
  * @param {{nowMs:number, day?:string, switchHour?:number}} opts
  */
-export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 12 }) {
+export const normPlate = (k) => String(k ?? "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+
+/**
+ * @param {string[]} [opts.eigenKentekens]  kentekens van de eigen auto's. Is de
+ *   lijst gezet, dan komen alleen die auto's in de garage-rij; auto's van
+ *   anderen (bv. ZZP'ers die via taxiID ritten rijden) staan apart vermeld.
+ */
+export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 12, eigenKentekens = null }) {
   const ymd = day ?? planDay(nowMs, switchHour);
   const { startMs, endMs } = dayBoundsMs(ymd);
   const fromMs = Math.max(startMs, nowMs);
@@ -88,6 +95,21 @@ export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 1
     };
   });
 
+  // Alleen eigen auto's in de garage. Een auto zonder bekend kenteken blijft
+  // staan (met waarschuwing), want dan weten we niet of hij van ons is.
+  const eigen = eigenKentekens?.length ? new Set(eigenKentekens.map(normPlate)) : null;
+  const andereAutos = [];
+  if (eigen) {
+    for (let i = cars.length - 1; i >= 0; i--) {
+      const c = cars[i];
+      if (c.kenteken && !eigen.has(normPlate(c.kenteken))) {
+        if (c.aantalRitten) andereAutos.push({ kenteken: c.kenteken, aantalRitten: c.aantalRitten, eersteRit: c.eersteRit?.tijd ?? null });
+        cars.splice(i, 1);
+      }
+    }
+    andereAutos.sort((a, b) => String(a.eersteRit).localeCompare(String(b.eersteRit)));
+  }
+
   // Inrijvolgorde: eerst zonder rit, dan laatste eerste rit ... vroegste eerste rit.
   cars.sort((a, b) => {
     if (!a.eersteRit && !b.eersteRit) return (a.kenteken ?? a.vehicleId).localeCompare(b.kenteken ?? b.vehicleId);
@@ -111,7 +133,7 @@ export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 1
     );
   }
   for (const c of inrijvolgorde.filter((c) => !c.bekend)) {
-    waarschuwingen.push(`Kenteken van voertuig-id ${c.vehicleId} niet gevonden in taxiID. Zet het in config/voertuigen.json.`);
+    waarschuwingen.push(`Kenteken van voertuig-id ${c.vehicleId} niet gevonden in taxiID; onbekend of dit een eigen auto is. Zet het in config/voertuigen.json.`);
   }
 
   return {
@@ -120,6 +142,7 @@ export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 1
     berekendOm: new Date(nowMs).toISOString(),
     inrijvolgorde,
     zonderAuto: zonderAuto.map((r) => ({ tijd: hhmm(r.requestedDate), referentie: r.reference, van: r.from, naar: r.to })),
+    andereAutos,
     waarschuwingen,
   };
 }

@@ -25,6 +25,9 @@ alleen ritreferentie, tijd, plaatsnaam en vluchtnummer.
   `config/voertuigen.json`. Een onbekend voertuig-id geeft een waarschuwing.
 - Het scherm ververst elke 2 minuten (taxiID wordt hooguit elke 5 minuten
   gevraagd). Bij een storing blijft de laatste stand staan met een melding.
+- Alleen de eigen auto's uit `config/eigen-autos.json` staan in de rij. Auto's van
+  anderen (bv. ZZP'ers) met ritten worden onderaan apart vermeld. Komt er een
+  eigen auto bij, zet het kenteken in dat bestand.
 - Een andere dag bekijken: `/?datum=2026-10-13`.
 - De deur staat links, met de auto die het eerst weg moet ernaast. Deur rechts: zet `&deur=rechts` achter de link.
 
@@ -140,3 +143,20 @@ Met een Raspberry Pi (Raspberry Pi OS met bureaublad):
 - `src/store.js`: opslag (bestand of Spaces)
 - `public/garage.html`: het scherm
 - `config/voertuigen.json`: koppeltabel voertuig-id → kenteken
+
+## Bekende punten (stand 13 oktober 2026)
+
+- **Voertuig-id's:** in taxiID hoort een voertuig bij een chauffeur. Rijdt een
+  andere chauffeur in dezelfde auto, dan is er een ander voertuig-id (GGZ-37-R
+  heeft er twee). De app zoekt een onbekend id zelf op via
+  `GET /vehicles/<id>` (kenteken, merk/model) en voegt id's met hetzelfde
+  kenteken samen tot één kaart.
+- **`include` met vehicle en/of driver** in de rittenlijst geeft HTTP 500; niet gebruiken.
+- **AeroDataBox** stuurt bij een vluchtnummer soms ook de vlucht van een andere
+  dag mee. De bot gebruikt alleen het deel van de aangemelde dag en negeert
+  "opgestegen/geland" met een tijd in de toekomst (fout van 13-10, hersteld).
+- **DigitalOcean:** bleef een nieuwe versie hangen op "deploy readiness probe
+  failed" zonder logs, dan hielp **Actions → Force Rebuild and Deploy** met
+  **Clear build cache** (13-10-2026).
+- Alleen één exemplaar van de app laten draaien (`instance_count: 1`); bij een
+  herstart verschijnt eenmalig een Telegram-"Conflict"-melding, dat is normaal.

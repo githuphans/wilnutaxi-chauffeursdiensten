@@ -2,6 +2,21 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_PATH = fileURLToPath(new URL("../config/voertuigen.json", import.meta.url));
+const EIGEN_PATH = fileURLToPath(new URL("../config/eigen-autos.json", import.meta.url));
+
+/**
+ * Kentekens van de eigen auto's (alleen die horen in de garage). Uit
+ * EIGEN_KENTEKENS (komma's) of anders config/eigen-autos.json. Leeg = alle auto's.
+ */
+export function loadEigenKentekens(env = process.env, path = EIGEN_PATH) {
+  if (env.EIGEN_KENTEKENS) return env.EIGEN_KENTEKENS.split(",").map((s) => s.trim()).filter(Boolean);
+  try {
+    const raw = JSON.parse(readFileSync(path, "utf8"));
+    return Array.isArray(raw?.kentekens) ? raw.kentekens.map(String) : [];
+  } catch {
+    return [];
+  }
+}
 
 /** Leest de koppeltabel vehicleId -> { kenteken, naam }. Sleutels die met "_" beginnen zijn uitleg. */
 export function loadVehicles(path = process.env.VOERTUIGEN_PAD || DEFAULT_PATH) {

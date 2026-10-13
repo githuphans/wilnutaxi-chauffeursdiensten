@@ -57,6 +57,7 @@
 
   .meldingen { display: flex; flex-direction: column; gap: .6vw; }
   .melding { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: .8vw 1.2vw; font-size: clamp(14px, 1.35vw, 26px); }
+  .info { color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: .6vw 1.2vw; font-size: clamp(13px, 1.15vw, 22px); }
   footer { color: var(--muted); font-size: clamp(12px, 1vw, 18px); display: flex; justify-content: space-between; gap: 1em; flex-wrap: wrap; }
   .fout { color: #ff8a80; }
 
@@ -130,7 +131,10 @@
         <div class="rit">${ritHtml}</div>
       </article>`;
     }).join("");
-    el("meldingen").innerHTML = d.waarschuwingen.map((w) => `<div class="melding">⚠ ${esc(w)}</div>`).join("");
+    const andere = (d.andereAutos || []).map((a) => `${esc(a.kenteken)} (${a.aantalRitten} ${a.aantalRitten === 1 ? "rit" : "ritten"}${a.eersteRit ? ", eerste " + esc(a.eersteRit) : ""})`);
+    el("meldingen").innerHTML =
+      d.waarschuwingen.map((w) => `<div class="melding">⚠ ${esc(w)}</div>`).join("") +
+      (andere.length ? `<div class="info">Rijden ook ritten, maar staan niet in onze garage: ${andere.join(" · ")}</div>` : "");
     el("status").textContent = "Bijgewerkt " + fmt.format(new Date()) + " · taxiID opgehaald " + fmt.format(new Date(d.taxiIdOpgehaald)) + " · ververst elke 2 minuten";
     el("status").className = "";
   }
