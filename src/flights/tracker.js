@@ -126,16 +126,20 @@ export function createTracker({
       if (res.kind === "empty") {
         return `Ik vind vlucht ${flight} niet op ${dayLabel(date)}. Klopt het nummer en de datum? Stuur bijvoorbeeld: ${flight} 13-10.`;
       }
-      const chosen = chooseLeg(res.legs, homeAirports);
+      const chosen = chooseLeg(res.legs, homeAirports, { date });
+      if (!chosen) {
+        return `Ik vind vlucht ${flight} niet op ${dayLabel(date)}. Klopt het nummer en de datum? Stuur bijvoorbeeld: ${flight} 13-10.`;
+      }
       if (chosen.rol !== "aankomst") {
         return `Vlucht ${flight} op ${dayLabel(date)} landt niet op een luchthaven waar wij ophalen (${chosen.leg.from.iata ?? "?"} → ${chosen.leg.to.iata ?? "?"}). Vluchtupdates zijn alleen voor ophaalritten na de landing.`;
       }
-      const c = classify(chosen.leg);
+      const c = classify(chosen.leg, nowMs);
       fs = {
         flight,
         date,
         rol: chosen.rol,
         leg: chosen.leg,
+        refArr: chosen.leg.arr.scheduled ?? null,
         lastCheck: nowMs,
         notified: {
           ...(fs?.notified ?? {}),
@@ -150,7 +154,7 @@ export function createTracker({
       S().flights[key] = fs;
     }
 
-    const c = classify(fs.leg);
+    const c = classify(fs.leg, nowMs);
     if ((fs.rol === "aankomst" && c.landed) || (fs.rol === "vertrek" && c.departed)) {
       store.save();
       return `${flight} is al ${c.landed ? `geland om ${hhmm(fs.leg.arr.actual ?? c.arrBest)}` : `vertrokken om ${hhmm(c.depBest)}`}. Ik volg hem niet meer.`;
@@ -159,7 +163,7 @@ export function createTracker({
     fs.nextCheck = nextCheckAt({ leg: fs.leg, nowMs, cfg }) ?? nowMs + HOUR;
     S().subscriptions.push({ chatId, key, createdAt: new Date(nowMs).toISOString(), rit: rit ?? null });
     store.save();
-    return confirmationText({ flight, leg: fs.leg, rol: fs.rol, dagLabel: dayLabel(date), rit });
+    return confirmationText({ flight, leg: fs.leg, rol: fs.rol, dagLabel: dayLabel(date), rit, nowMs });
   }
 
   function unsubscribe({ chatId, text }) {
@@ -205,6 +209,19 @@ export function createTracker({
     try {
       for (const [key, fs] of Object.entries(S().flights)) {
         const subs = subsFor(key);
+        if (subs.length && isImplausible(fs, nowMs)) {
+          log.warn?.(`Herstel ${fs.flight} ${fs.date}: eerdere melding hoorde bij een andere dag of lag in de toekomst.`);
+          await broadcast(
+            key,
+            `⚠️ Correctie: de eerdere melding over ${fs.flight} (opgestegen/geland) was onjuist; die gegevens hoorden bij een andere vlucht of dag. Ik volg ${fs.flight} van ${dayLabel(fs.date)} gewoon verder.`
+          );
+          fs.done = false;
+          fs.doneAt = undefined;
+          fs.notified = {};
+          fs.refArr = null;
+          fs.nextCheck = nowMs;
+          store.save();
+        }
         if (fs.done || !subs.length || !fs.nextCheck || fs.nextCheck > nowMs) continue;
         const res = await callApi(fs.flight, fs.date, nowMs);
         if (res.kind !== "found") {
@@ -214,11 +231,21 @@ export function createTracker({
           store.save();
           continue;
         }
-        const chosen = chooseLeg(res.legs, homeAirports);
+        const chosen = chooseLeg(res.legs, homeAirports, { date: fs.date, refArr: fs.refArr ?? null });
+        if (!chosen) {
+          log.warn?.(`Controle ${fs.flight} ${fs.date}: geen vluchtdeel van deze dag in het antwoord (${res.legs.length} deel/delen); overgeslagen.`);
+          fs.nextCheck = nowMs + 15 * MIN;
+          store.save();
+          continue;
+        }
         fs.leg = chosen.leg;
         fs.rol = chosen.rol;
+        fs.refArr ??= chosen.leg.arr.scheduled ?? null;
         fs.lastCheck = nowMs;
-        const ev = detectEvents({ flight: fs.flight, leg: fs.leg, rol: fs.rol, notified: fs.notified, cfg });
+        log.info?.(
+          `Controle ${fs.flight} ${fs.date}: status ${fs.leg.status}, vertrek ${hhmm(fs.leg.dep.scheduled)}/${hhmm(fs.leg.dep.actual ?? fs.leg.dep.estimated)}, aankomst ${hhmm(fs.leg.arr.scheduled)}/${hhmm(fs.leg.arr.actual ?? fs.leg.arr.estimated)} (gepland/werkelijk of verwacht).`
+        );
+        const ev = detectEvents({ flight: fs.flight, leg: fs.leg, rol: fs.rol, notified: fs.notified, cfg, nowMs });
         fs.notified = ev.notified;
         for (const m of ev.messages) await broadcast(key, m);
         const next = ev.done ? null : nextCheckAt({ leg: fs.leg, nowMs, cfg });
@@ -235,6 +262,14 @@ export function createTracker({
     } finally {
       running = false;
     }
+  }
+
+  /** Is een eerder gemelde start/landing onmogelijk (andere dag, of in de toekomst)? */
+  function isImplausible(fs, nowMs) {
+    if (!fs.leg || !(fs.notified?.landed || fs.notified?.departed)) return false;
+    const otherDay = amsterdamYmd(fs.leg.arr.scheduled ?? fs.leg.dep.scheduled ?? nowMs) !== fs.date && amsterdamYmd(fs.leg.dep.scheduled ?? nowMs) !== fs.date;
+    const c = classify(fs.leg, nowMs);
+    return otherDay || (fs.notified.landed && !c.landed) || (fs.notified.departed && !c.departed);
   }
 
   function cleanup(nowMs) {

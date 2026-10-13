@@ -37,12 +37,18 @@ const STATUS_NL = {
 };
 export const statusNl = (s) => STATUS_NL[s] ?? String(s ?? "onbekend").toLowerCase();
 
-export function classify(leg) {
+export function classify(leg, nowMs = Date.now()) {
   const s = leg?.status ?? "Unknown";
   const canceled = s === "Canceled" || s === "CanceledUncertain";
   const diverted = s === "Diverted";
-  const landed = s === "Arrived" || Boolean(leg?.arr?.actual);
-  const departed = landed || ["Departed", "EnRoute", "Approaching"].includes(s) || Boolean(leg?.dep?.actual);
+  // Controle op de klok: een "werkelijke" tijd of status die in de toekomst
+  // ligt kan niet kloppen en telt niet mee (marge 15 minuten).
+  const notFuture = (iso) => Boolean(iso) && Date.parse(iso) <= nowMs + 15 * 60000;
+  const arrBestRaw = leg?.arr?.actual ?? leg?.arr?.estimated ?? leg?.arr?.scheduled ?? null;
+  const depBestRaw = leg?.dep?.actual ?? leg?.dep?.estimated ?? leg?.dep?.scheduled ?? null;
+  const landed = notFuture(leg?.arr?.actual) || (s === "Arrived" && notFuture(arrBestRaw));
+  const departed =
+    landed || notFuture(leg?.dep?.actual) || (["Departed", "EnRoute", "Approaching"].includes(s) && notFuture(depBestRaw));
   return {
     canceled,
     diverted,
@@ -57,8 +63,8 @@ const delta = (sched, best) => (sched && best ? minutesBetween(sched, best) : 0)
 const plusMin = (m) => (m > 0 ? ` (+${m} min)` : m < 0 ? ` (${m} min)` : "");
 
 /** Bevestiging direct na aanmelden. */
-export function confirmationText({ flight, leg, rol, dagLabel, rit }) {
-  const c = classify(leg);
+export function confirmationText({ flight, leg, rol, dagLabel, rit, nowMs = Date.now() }) {
+  const c = classify(leg, nowMs);
   const lines = [];
   lines.push(`✈️ ${flight}${leg.airline ? ` (${leg.airline})` : ""}: ${leg.from.city ?? leg.from.iata ?? "?"} → ${leg.to.city ?? leg.to.iata ?? "?"}, ${dagLabel}`);
   lines.push(`Gepland: vertrek ${hhmm(leg.dep.scheduled)}, aankomst ${hhmm(leg.arr.scheduled)}`);
@@ -83,8 +89,8 @@ export function confirmationText({ flight, leg, rol, dagLabel, rit }) {
  * @param {object} notified  wat al gemeld is: { canceled, diverted, departed, landed, lastEta, lastDep }
  * @returns {{messages:string[], notified:object, done:boolean}}
  */
-export function detectEvents({ flight, leg, rol, notified = {}, cfg = DEFAULTS }) {
-  const c = classify(leg);
+export function detectEvents({ flight, leg, rol, notified = {}, cfg = DEFAULTS, nowMs = Date.now() }) {
+  const c = classify(leg, nowMs);
   const n = { ...notified };
   const msgs = [];
   const fromCity = leg.from.city ?? leg.from.iata ?? "";
@@ -153,7 +159,7 @@ export function detectEvents({ flight, leg, rol, notified = {}, cfg = DEFAULTS }
  * Ruwe schatting per vlucht van 2 uur, 's avonds aangemeld: ~12-15 aanroepen.
  */
 export function nextCheckAt({ leg, nowMs, cfg = DEFAULTS }) {
-  const c = classify(leg);
+  const c = classify(leg, nowMs);
   const sched = leg?.arr?.scheduled ? Date.parse(leg.arr.scheduled) : null;
   if (sched && nowMs > sched + 8 * HOUR) return null; // te lang geleden: opgeven
 

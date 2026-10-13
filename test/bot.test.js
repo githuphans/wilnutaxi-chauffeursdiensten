@@ -106,3 +106,52 @@ test("vlucht die vertrekt vanaf onze luchthaven wordt niet gevolgd", async () =>
   assert.match(await s.msg("HV5000 morgen"), /landt niet op een luchthaven waar wij ophalen \(EIN → PMI\)/);
   assert.equal(s.state.subscriptions.length, 0);
 });
+
+// Herhaling van 13-10-2026: aangemeld voor HV6216 op de 13e; om 06:00 stuurde
+// AeroDataBox (ook) de vlucht van de 12e mee, die al geland was.
+const hv = (day, over = {}) => ({
+  number: "HV 6216", airline: "Transavia", status: "Expected",
+  from: { iata: "TFS", city: "Tenerife Island" }, to: { iata: "EIN", city: "Eindhoven" },
+  dep: { scheduled: `2026-10-${day}T10:25:00.000Z`, estimated: null, actual: null },
+  arr: { scheduled: `2026-10-${day}T14:45:00.000Z`, estimated: null, actual: null, terminal: null, gate: null, belt: null },
+  ...over,
+});
+
+test("vlucht van een andere dag in het antwoord wordt genegeerd", async () => {
+  const gisteren = hv("12", { status: "Arrived", dep: { ...hv("12").dep, actual: "2026-10-12T10:30:00.000Z" }, arr: { ...hv("12").arr, actual: "2026-10-12T14:31:00.000Z" } });
+  const s = setup({ legsByCall: [[hv("13")], [gisteren, hv("13")], [gisteren]] });
+  s.setNow(Date.parse("2026-10-12T17:22:00Z"));
+  await s.msg("wnt2026");
+  assert.match(await s.msg("HV6216 13-10"), /volgens schema/);
+  await s.tracker.tick(Date.parse("2026-10-13T04:00:00Z")); // 06:00: beide dagen in het antwoord
+  assert.equal(s.sent.length, 0);
+  await s.tracker.tick(Date.parse("2026-10-13T08:30:00Z")); // alleen gisteren in het antwoord
+  assert.equal(s.sent.length, 0);
+});
+
+test("status 'Arrived' met tijden in de toekomst telt niet als geland", async () => {
+  const nep = hv("13", { status: "Arrived", arr: { ...hv("13").arr, estimated: "2026-10-13T14:31:00.000Z" } });
+  const s = setup({ legsByCall: [[hv("13")], [nep]] });
+  s.setNow(Date.parse("2026-10-12T17:22:00Z"));
+  await s.msg("wnt2026");
+  await s.msg("HV6216 13-10");
+  await s.tracker.tick(Date.parse("2026-10-13T04:00:00Z"));
+  assert.ok(!s.sent.some(([, t]) => /geland|opgestegen/.test(t)));
+});
+
+test("eerder onterecht gemelde landing wordt hersteld en het volgen gaat door", async () => {
+  const s = setup({ legsByCall: [[hv("13")]] });
+  s.setNow(Date.parse("2026-10-12T17:22:00Z"));
+  await s.msg("wnt2026");
+  await s.msg("HV6216 13-10");
+  // zoals de opgeslagen stand na de foute melding van 06:00
+  const fs = s.state.flights["HV6216|2026-10-13"];
+  fs.leg = hv("12", { status: "Arrived", arr: { ...hv("12").arr, actual: "2026-10-12T14:31:00.000Z" } });
+  fs.notified = { departed: true, landed: true };
+  fs.done = true;
+  fs.doneAt = Date.parse("2026-10-13T04:00:00Z");
+  await s.tracker.tick(Date.parse("2026-10-13T06:50:00Z"));
+  assert.match(s.sent[0][1], /Correctie/);
+  assert.equal(fs.done, false);
+  assert.equal(fs.leg.dep.scheduled, "2026-10-13T10:25:00.000Z");
+});

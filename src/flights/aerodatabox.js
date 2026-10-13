@@ -55,13 +55,25 @@ export function mapLeg(raw) {
  * "thuisluchthaven" (ophalen), anders het deel dat daar vertrekt
  * (wegbrengen), anders het eerste.
  */
-export function chooseLeg(legs, homeAirports) {
+export function chooseLeg(legs, homeAirports, { date = null, refArr = null } = {}) {
+  // Alleen vluchtdelen van de gevraagde dag. AeroDataBox kan bij een
+  // vluchtnummer ook de vlucht van een andere dag meesturen (13-10-2026:
+  // "opgestegen/geland" van de vlucht van gisteren). Bij een volgcontrole
+  // moet de geplande aankomst bovendien binnen 6 uur van die bij aanmelden liggen.
+  const ymd = (iso) => (iso ? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date(iso)) : null);
+  let pool = legs;
+  if (refArr) {
+    const ref = Date.parse(refArr);
+    pool = legs.filter((l) => l.arr.scheduled && Math.abs(Date.parse(l.arr.scheduled) - ref) <= 6 * 3600000);
+  } else if (date) {
+    pool = legs.filter((l) => ymd(l.arr.scheduled) === date || ymd(l.dep.scheduled) === date);
+  }
   const home = new Set(homeAirports);
-  const arriving = legs.find((l) => l.to.iata && home.has(l.to.iata));
+  const arriving = pool.find((l) => l.to.iata && home.has(l.to.iata));
   if (arriving) return { leg: arriving, rol: "aankomst" };
-  const departing = legs.find((l) => l.from.iata && home.has(l.from.iata));
+  const departing = pool.find((l) => l.from.iata && home.has(l.from.iata));
   if (departing) return { leg: departing, rol: "vertrek" };
-  return legs.length ? { leg: legs[0], rol: "aankomst" } : null;
+  return pool.length ? { leg: pool[0], rol: "aankomst" } : null;
 }
 
 export function createAeroDataBox({
