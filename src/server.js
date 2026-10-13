@@ -9,6 +9,7 @@
  * het garagescherm werkt ook zonder.
  */
 import "dotenv/config";
+console.log(`Start chauffeursdiensten (Node ${process.version}), poort ${process.env.PORT || 3000}.`);
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -73,7 +74,11 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => console.log(`Chauffeursdiensten draait op poort ${PORT}${SCREEN_TOKEN ? " (scherm met token)" : ""}.`));
+server.on("error", (err) => {
+  console.error(`Webserver kan niet starten: ${err.message}`);
+  process.exit(1);
+});
+server.listen(PORT, "0.0.0.0", () => console.log(`Chauffeursdiensten draait op poort ${PORT}${SCREEN_TOKEN ? " (scherm met token)" : ""}.`));
 
 // --- Vluchtbot -------------------------------------------------------------
 if (env.TELEGRAM_BOT_TOKEN) {
