@@ -1,5 +1,5 @@
 {
-  "_uitleg": "Koppeltabel taxiID-voertuig-id -> kenteken. Eén auto kan in taxiID meerdere voertuig-id's hebben (GGZ-37-R heeft er twee); id's met hetzelfde kenteken worden op het scherm samengevoegd tot één kaart. Gekoppeld via de ritreferenties van 12 en 13 oktober 2026. Een onbekend id verschijnt vanzelf als waarschuwing.",
+  "_uitleg": "Reserve-koppeling voertuig-id -> kenteken, plus de nette naam per kenteken. Het kenteken wordt altijd eerst actueel in taxiID opgezocht (een chauffeur kan in zijn app van auto wisselen); deze tabel geldt alleen als taxiID geen antwoord geeft.",
   "689a0b9b21ba4294ebdc1c39": {
     "kenteken": "GGZ-37-R",
     "naam": "BYD Atto 3"

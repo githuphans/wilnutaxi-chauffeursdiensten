@@ -77,6 +77,7 @@ export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 1
     return {
       vehicleId,
       vehicleIds: [...ids],
+      chauffeursMetRit: new Set(list.map((r) => r.vehicleId)).size,
       kenteken: info?.kenteken ?? null,
       naam: info?.naam ?? null,
       bekend: Boolean(info),
@@ -94,6 +95,17 @@ export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 1
         : null,
     };
   });
+
+  // Elke eigen auto krijgt een kaart, ook als geen enkel voertuig-id er nu naar wijst.
+  if (eigenKentekens?.length) {
+    const aanwezig = new Set(cars.map((c) => normPlate(c.kenteken)));
+    const naamPerKenteken = new Map(Object.values(vehicles).filter((v) => v?.kenteken).map((v) => [normPlate(v.kenteken), v.naam]));
+    for (const k of eigenKentekens) {
+      if (aanwezig.has(normPlate(k))) continue;
+      cars.push({ vehicleId: null, vehicleIds: [], kenteken: k, naam: naamPerKenteken.get(normPlate(k)) ?? null, bekend: true, aantalRitten: 0, eersteRit: null });
+      aanwezig.add(normPlate(k));
+    }
+  }
 
   // Alleen eigen auto's in de garage. Een auto zonder bekend kenteken blijft
   // staan (met waarschuwing), want dan weten we niet of hij van ons is.
@@ -131,6 +143,13 @@ export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 1
     waarschuwingen.push(
       `${zonderAuto.length} ${zonderAuto.length === 1 ? "rit heeft" : "ritten hebben"} nog geen auto (eerste om ${hhmm(zonderAuto[0].requestedDate)}). De volgorde kan nog veranderen.`
     );
+  }
+  // Dezelfde auto bij twee chauffeurs (voertuig-id's) met ritten: waarschijnlijk
+  // staat bij één van hen nog de auto van een vorige dienst in de app.
+  for (const c of inrijvolgorde) {
+    if ((c.chauffeursMetRit ?? 0) > 1) {
+      waarschuwingen.push(`${c.kenteken} staat bij ${c.chauffeursMetRit} chauffeurs als auto ingesteld. Controleer in de chauffeursapp wie welke auto rijdt; de volgorde kan dan veranderen.`);
+    }
   }
   for (const c of inrijvolgorde.filter((c) => !c.bekend)) {
     waarschuwingen.push(`Kenteken van voertuig-id ${c.vehicleId} niet gevonden in taxiID; onbekend of dit een eigen auto is. Zet het in config/voertuigen.json.`);

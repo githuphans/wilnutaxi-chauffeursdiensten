@@ -146,11 +146,13 @@ Met een Raspberry Pi (Raspberry Pi OS met bureaublad):
 
 ## Bekende punten (stand 13 oktober 2026)
 
-- **Voertuig-id's:** in taxiID hoort een voertuig bij een chauffeur. Rijdt een
-  andere chauffeur in dezelfde auto, dan is er een ander voertuig-id (GGZ-37-R
-  heeft er twee). De app zoekt een onbekend id zelf op via
-  `GET /vehicles/<id>` (kenteken, merk/model) en voegt id's met hetzelfde
-  kenteken samen tot één kaart.
+- **Voertuig-id's:** in taxiID hoort een voertuig-id bij een chauffeur; het
+  kenteken is de auto die de chauffeur in zijn app heeft gekozen en kan per
+  dienst wisselen. De app zoekt daarom elk id steeds actueel op via
+  `GET /vehicles/<id>` (10 minuten gecachet) en voegt id's met hetzelfde
+  kenteken samen tot één kaart. `config/voertuigen.json` is alleen reserve.
+  Heeft een chauffeur in zijn app nog de auto van zijn vorige dienst
+  geselecteerd, dan toont het scherm die auto: dat is niet op te lossen.
 - **`include` met vehicle en/of driver** in de rittenlijst geeft HTTP 500; niet gebruiken.
 - **AeroDataBox** stuurt bij een vluchtnummer soms ook de vlucht van een andere
   dag mee. De bot gebruikt alleen het deel van de aangemelde dag en negeert

@@ -30,21 +30,30 @@ export function loadVehicles(path = process.env.VOERTUIGEN_PAD || DEFAULT_PATH) 
 }
 
 /**
- * Vult de koppeltabel aan met voertuigen die wel in de ritten staan maar niet
- * (of zonder kenteken) in de tabel: die worden in taxiID opgezocht.
- * De tabel gaat voor (eigen naam/kenteken); taxiID vult aan wat ontbreekt.
+ * Actuele koppeling voertuig-id -> kenteken.
+ *
+ * In taxiID hoort een voertuig-id bij een chauffeur; het kenteken erbij is wat
+ * de chauffeur in zijn app als auto heeft gekozen en kan dus per dienst
+ * wisselen (14-10-2026: Han reed eerst GGZ-37-R, daarna GHN-49-K met hetzelfde
+ * id). Daarom zoeken we ELK id uit de ritten en de tabel steeds opnieuw op in
+ * taxiID (kort gecachet). De tabel is alleen nog reserve als taxiID geen
+ * antwoord geeft, en levert de nette naam per kenteken (bv. "Toyota bZ4X").
  */
 export async function resolveVehicles(table, rides, taxiId) {
-  const out = { ...table };
-  const ids = new Set();
+  const norm = (k) => String(k ?? "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+  const naamPerKenteken = new Map();
+  for (const v of Object.values(table)) if (v?.kenteken && v.naam) naamPerKenteken.set(norm(v.kenteken), v.naam);
+
+  const ids = new Set(Object.keys(table));
   for (const r of rides) {
     if (r?.vehicleId && !String(r.status ?? "").toLowerCase().includes("cancel")) ids.add(r.vehicleId);
   }
-  const missing = [...ids].filter((id) => !out[id]?.kenteken);
-  if (!missing.length || !taxiId?.getVehicle) return out;
-  const found = await Promise.all(missing.map((id) => taxiId.getVehicle(id).then((v) => [id, v])));
+  const out = {};
+  const found = taxiId?.getVehicle ? await Promise.all([...ids].map((id) => taxiId.getVehicle(id).then((v) => [id, v]))) : [...ids].map((id) => [id, null]);
   for (const [id, v] of found) {
-    if (v) out[id] = { kenteken: v.kenteken, naam: out[id]?.naam || v.naam || null };
+    const kenteken = v?.kenteken ?? table[id]?.kenteken ?? null;
+    if (!kenteken) continue;
+    out[id] = { kenteken, naam: naamPerKenteken.get(norm(kenteken)) ?? v?.naam ?? table[id]?.naam ?? null, bron: v ? "taxiid" : "tabel" };
   }
   return out;
 }

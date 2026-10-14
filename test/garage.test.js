@@ -94,18 +94,19 @@ test("onbekend voertuig-id wordt in taxiID opgezocht (en gecachet)", async () =>
   let calls = 0;
   const fetchImpl = async (url) => {
     calls++;
-    assert.match(url, /\/vehicles\/NEW$/);
+    assert.match(url, /\/vehicles\/(NEW|OLD)$/);
     return { ok: true, status: 200, json: async () => ({ id: "NEW", licensePlate: "ggz-37-r", brand: "BYD", model: "Atto 3", driverId: "geheim" }) };
   };
   const client = createTaxiIdClient({ apiKey: "x", fetchImpl, log: { warn() {} } });
   const table = { OLD: { kenteken: "GGZ-37-R", naam: "BYD Atto 3" } };
   const rides = [{ vehicleId: "NEW", status: "assigned" }, { vehicleId: "OLD", status: "assigned" }, { vehicleId: "GONE", status: "canceled" }];
   const v = await resolveVehicles(table, rides, client);
-  assert.deepEqual(v.NEW, { kenteken: "GGZ-37-R", naam: "BYD Atto 3" });
+  assert.equal(v.NEW.kenteken, "GGZ-37-R");
+  assert.equal(v.NEW.naam, "BYD Atto 3");
   assert.ok(!JSON.stringify(v).includes("geheim"));
   assert.equal(v.GONE, undefined);
   await resolveVehicles(table, rides, client);
-  assert.equal(calls, 1);
+  assert.equal(calls, 2); // NEW en OLD één keer opgezocht, daarna uit de cache
 });
 
 test("alleen eigen auto's in de garage; andere auto's apart vermeld", () => {
@@ -116,4 +117,35 @@ test("alleen eigen auto's in de garage; andere auto's apart vermeld", () => {
   assert.deepEqual(r.andereAutos, [{ kenteken: "ZD792B", aantalRitten: 2, eersteRit: "12:00" }]);
   // zonder lijst: alle auto's (oude gedrag)
   assert.equal(computeGarageOrder(rides, V3, { nowMs: Date.parse("2026-10-13T11:00:00Z") }).inrijvolgorde.length, 4);
+});
+
+test("kenteken komt actueel uit taxiID, ook als de tabel iets anders zegt (chauffeur wisselde van auto)", async () => {
+  const table = {
+    HAN: { kenteken: "GGZ-37-R", naam: "BYD Atto 3" }, // zo stond het op 13-10
+    RON: { kenteken: "GHN-49-K", naam: "BYD Atto 3" },
+    HANS: { kenteken: "GNP-46-F", naam: "Toyota bZ4X" },
+  };
+  const huidig = { HAN: "GHN-49-K", RON: "GHN-49-K", HANS: "GNP-46-F" };
+  const taxiId = { getVehicle: async (id) => ({ kenteken: huidig[id], naam: "BYD Atto 3" }) };
+  const rides = [ride("HAN", "2026-10-15T02:25:00Z"), ride("RON", "2026-10-15T10:50:00Z"), ride("HANS", "2026-10-15T02:00:00Z")];
+  const v = await resolveVehicles(table, rides, taxiId);
+  assert.equal(v.HAN.kenteken, "GHN-49-K");
+  const r = computeGarageOrder(rides, v, { nowMs: Date.parse("2026-10-14T15:55:00Z"), eigenKentekens: ["GGZ-37-R", "GHN-49-K", "GNP-46-F"] });
+  // GGZ-37-R heeft geen rit meer maar blijft als eigen auto in de rij (achteraan)
+  assert.deepEqual(r.inrijvolgorde.map((c) => c.kenteken), ["GGZ-37-R", "GHN-49-K", "GNP-46-F"]);
+  assert.equal(r.inrijvolgorde[1].eersteRit.tijd, "04:25");
+  assert.equal(r.inrijvolgorde[1].aantalRitten, 2);
+  assert.equal(r.inrijvolgorde[0].eersteRit, null);
+});
+
+test("geeft taxiID geen antwoord, dan geldt de tabel", async () => {
+  const v = await resolveVehicles({ A: { kenteken: "GGZ-37-R", naam: "BYD Atto 3" } }, [ride("A", "2026-10-15T02:25:00Z")], { getVehicle: async () => null });
+  assert.equal(v.A.kenteken, "GGZ-37-R");
+});
+
+test("waarschuwing als één auto bij twee chauffeurs met ritten staat", () => {
+  const v = { HAN: { kenteken: "GHN-49-K", naam: null }, RON: { kenteken: "GHN-49-K", naam: null } };
+  const rides = [ride("HAN", "2026-10-15T02:25:00Z"), ride("RON", "2026-10-15T10:50:00Z")];
+  const r = computeGarageOrder(rides, v, { nowMs: Date.parse("2026-10-14T15:55:00Z") });
+  assert.ok(r.waarschuwingen.some((w) => /GHN-49-K staat bij 2 chauffeurs/.test(w)));
 });

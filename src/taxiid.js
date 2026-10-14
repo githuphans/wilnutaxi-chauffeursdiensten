@@ -98,9 +98,11 @@ export function createTaxiIdClient({
   /**
    * Eén voertuig opzoeken: GET /vehicles/<id> geeft o.a. licensePlate, brand
    * en model (getest op 12-10-2026). Alleen kenteken en merk/model worden
-   * bewaard, niet de chauffeur. Gevonden: 24 uur in de cache, fout: 15 min.
+   * bewaard, niet de chauffeur. Gevonden: 10 minuten in de cache, fout: 5 min.
    */
   const vehicleCache = new Map();
+  // Kort cachen: een chauffeur kan in zijn app van auto wisselen.
+  const vehicleCacheMs = (Number(process.env.VOERTUIG_CACHE_MINUTEN) || 10) * 60000;
   async function getVehicle(id) {
     const hit = vehicleCache.get(id);
     if (hit && hit.expiresAt > now()) return hit.value;
@@ -123,7 +125,7 @@ export function createTaxiIdClient({
     } catch (err) {
       log.warn?.(`Voertuig ${id} opzoeken in taxiID mislukt: ${err.message}`);
     }
-    vehicleCache.set(id, { value, expiresAt: now() + (value ? 24 * 3600000 : 15 * 60000) });
+    vehicleCache.set(id, { value, expiresAt: now() + (value ? vehicleCacheMs : 5 * 60000) });
     return value;
   }
 
