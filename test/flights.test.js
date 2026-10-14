@@ -99,3 +99,16 @@ test("pollschema: zuinig ver voor vertrek, 's nachts stil, vaak vlak voor landin
   assert.equal(nextCheckAt({ leg: inAir, nowMs: Date.parse("2026-10-12T18:30:00Z") }), null);
   assert.equal(classify(inAir).departed, true);
 });
+
+test("landing met een tijd 13 minuten in de toekomst telt niet (KL682, 14-10)", () => {
+  const leg = mapLeg({
+    number: "KL 682", status: "Arrived", airline: { name: "KLM" },
+    departure: { airport: { iata: "YVR", municipalityName: "Vancouver" }, scheduledTime: { utc: "2026-10-14 00:50Z" }, runwayTime: { utc: "2026-10-14 01:28Z" } },
+    arrival: { airport: { iata: "AMS", municipalityName: "Amsterdam" }, scheduledTime: { utc: "2026-10-14 10:05Z" }, runwayTime: { utc: "2026-10-14 09:52Z" } },
+  });
+  const vroeg = detectEvents({ flight: "KL682", leg, rol: "aankomst", notified: { departed: true }, nowMs: Date.parse("2026-10-14T09:39:00Z") });
+  assert.ok(!vroeg.messages.some((m) => /geland/.test(m)));
+  assert.equal(vroeg.done, false);
+  const op_tijd = detectEvents({ flight: "KL682", leg, rol: "aankomst", notified: { departed: true }, nowMs: Date.parse("2026-10-14T09:53:00Z") });
+  assert.ok(op_tijd.messages.some((m) => /geland om 11:52/.test(m)));
+});

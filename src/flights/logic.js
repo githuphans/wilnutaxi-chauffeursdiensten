@@ -42,8 +42,9 @@ export function classify(leg, nowMs = Date.now()) {
   const canceled = s === "Canceled" || s === "CanceledUncertain";
   const diverted = s === "Diverted";
   // Controle op de klok: een "werkelijke" tijd of status die in de toekomst
-  // ligt kan niet kloppen en telt niet mee (marge 15 minuten).
-  const notFuture = (iso) => Boolean(iso) && Date.parse(iso) <= nowMs + 15 * 60000;
+  // ligt kan niet kloppen en telt niet mee (marge 2 minuten; 14-10-2026 meldde
+  // AeroDataBox KL682 om 11:39 al als "geland om 11:52").
+  const notFuture = (iso) => Boolean(iso) && Date.parse(iso) <= nowMs + 2 * 60000;
   const arrBestRaw = leg?.arr?.actual ?? leg?.arr?.estimated ?? leg?.arr?.scheduled ?? null;
   const depBestRaw = leg?.dep?.actual ?? leg?.dep?.estimated ?? leg?.dep?.scheduled ?? null;
   const landed = notFuture(leg?.arr?.actual) || (s === "Arrived" && notFuture(arrBestRaw));
