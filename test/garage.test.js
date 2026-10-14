@@ -149,3 +149,11 @@ test("waarschuwing als één auto bij twee chauffeurs met ritten staat", () => {
   const r = computeGarageOrder(rides, v, { nowMs: Date.parse("2026-10-14T15:55:00Z") });
   assert.ok(r.waarschuwingen.some((w) => /GHN-49-K staat bij 2 chauffeurs/.test(w)));
 });
+
+test("kenteken in vaste schrijfwijze en luchthaven als plaatsnaam", () => {
+  const v = { R: { kenteken: "GHN49K", naam: "BYD Atto 3" } };
+  const rides = [ride("R", "2026-10-15T02:25:00Z", { departure: { city: "Nuenen" }, destination: { internationalAlias: "Eindhoven Airport", gps: { lat: 51.45, lng: 5.37 } } })];
+  const r = computeGarageOrder(rides, v, { nowMs: Date.parse("2026-10-14T16:00:00Z"), eigenKentekens: ["GHN-49-K"] });
+  assert.equal(r.inrijvolgorde[0].kenteken, "GHN-49-K");
+  assert.equal(r.inrijvolgorde[0].eersteRit.naar, "Eindhoven Airport");
+});

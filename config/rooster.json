@@ -1,0 +1,6 @@
+{
+  "_uitleg": "Chauffeurs met een rooster in Google Agenda. 'zoekwoord' moet als los woord in de titel van de dienst staan; het kenteken wordt gezocht in titel, locatie (de geboekte auto), beschrijving en deelnemers. 'voertuigIds' zijn de taxiID-voertuig-id's van deze chauffeur. Het agenda-adres staat in de geheime instelling ROOSTER_ICS_URL.",
+  "chauffeurs": [
+    { "naam": "Han", "zoekwoord": "HAN", "voertuigIds": ["689a0f7521ba4294ebdc1c7e"] }
+  ]
+}

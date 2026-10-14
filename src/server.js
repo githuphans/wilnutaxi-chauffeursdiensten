@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 import { createTaxiIdClient } from "./taxiid.js";
 import { computeGarageOrder } from "./garage.js";
 import { loadVehicles, resolveVehicles, loadEigenKentekens } from "./vehicles.js";
+import { createRoosterBron, loadRoosterConfig, pasRoosterToe } from "./rooster.js";
+import { planDay } from "./garage.js";
 import { createStore } from "./store.js";
 import { createAeroDataBox } from "./flights/aerodatabox.js";
 import { createTracker } from "./flights/tracker.js";
@@ -28,6 +30,7 @@ const SWITCH_HOUR = Number(env.GARAGE_WISSELUUR ?? 12);
 const pagePath = fileURLToPath(new URL("../public/garage.html", import.meta.url));
 
 const taxiId = createTaxiIdClient();
+const rooster = createRoosterBron();
 let vehicles = loadVehicles();
 
 function authorized(url) {
@@ -60,8 +63,20 @@ const server = createServer(async (req, res) => {
         console.warn(`voertuigen.json lezen mislukt, vorige versie blijft: ${err.message}`);
       }
       const { rides, fetchedAt, stale, error } = await taxiId.getUpcomingRides({ force: url.searchParams.has("vers") });
-      const allVehicles = await resolveVehicles(vehicles, rides, taxiId);
-      const result = computeGarageOrder(rides, allVehicles, { nowMs: Date.now(), day, switchHour: SWITCH_HOUR, eigenKentekens: loadEigenKentekens() });
+      const eigen = loadEigenKentekens();
+      const nowMs = Date.now();
+      const dag = day ?? planDay(nowMs, SWITCH_HOUR);
+      let allVehicles = await resolveVehicles(vehicles, rides, taxiId);
+      // Rooster uit Google Agenda gaat voor op de auto die in de chauffeursapp staat.
+      const diensten = rooster.actief ? await rooster.voorDag(dag, loadRoosterConfig(), eigen) : [];
+      const { vehicles: metRooster, afwijkingen } = pasRoosterToe(allVehicles, diensten);
+      allVehicles = metRooster;
+      const result = computeGarageOrder(rides, allVehicles, { nowMs, day: dag, switchHour: SWITCH_HOUR, eigenKentekens: eigen });
+      for (const a of afwijkingen) {
+        const heeftRit = result.inrijvolgorde.some((c) => c.aantalRitten > 0 && c.vehicleIds?.some((id) => a.voertuigIds.includes(id)));
+        if (heeftRit) result.waarschuwingen.unshift(`${a.naam}: rooster ${a.rooster}, chauffeursapp ${a.app}. Het scherm volgt het rooster.`);
+      }
+      result.rooster = diensten.map((d) => ({ naam: d.naam, kenteken: d.kenteken }));
       if (stale) result.waarschuwingen.unshift(`taxiID was niet bereikbaar (${error}); dit is de stand van ${new Date(fetchedAt).toLocaleTimeString("nl-NL", { timeZone: "Europe/Amsterdam", hour: "2-digit", minute: "2-digit" })}.`);
       result.taxiIdOpgehaald = new Date(fetchedAt).toISOString();
       return sendJson(res, 200, result);

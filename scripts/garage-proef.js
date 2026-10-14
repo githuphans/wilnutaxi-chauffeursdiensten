@@ -11,12 +11,21 @@ import "dotenv/config";
 import { createTaxiIdClient } from "../src/taxiid.js";
 import { computeGarageOrder } from "../src/garage.js";
 import { cityOf, isCanceled } from "../src/taxiid.js";
+import { createRoosterBron, loadRoosterConfig, pasRoosterToe } from "../src/rooster.js";
+import { planDay } from "../src/garage.js";
 import { loadVehicles, resolveVehicles, loadEigenKentekens } from "../src/vehicles.js";
 
 const day = process.argv[2];
 const client = createTaxiIdClient();
 const { rides } = await client.getUpcomingRides();
-const vehicles = await resolveVehicles(loadVehicles(), rides, client);
+let vehicles = await resolveVehicles(loadVehicles(), rides, client);
+const dagVoorRooster = day ?? planDay(Date.now(), Number(process.env.GARAGE_WISSELUUR ?? 12));
+const bron = createRoosterBron();
+const diensten = bron.actief ? await bron.voorDag(dagVoorRooster, loadRoosterConfig(), loadEigenKentekens()) : [];
+const toegepast = pasRoosterToe(vehicles, diensten);
+vehicles = toegepast.vehicles;
+console.log(bron.actief ? `Rooster: ${diensten.length ? diensten.map((d) => `${d.naam} ${d.kenteken}`).join(", ") : "geen diensten gevonden op deze dag"}` : "Rooster: ROOSTER_ICS_URL niet ingesteld");
+for (const a of toegepast.afwijkingen) console.log(`! ${a.naam}: rooster ${a.rooster}, chauffeursapp ${a.app}`);
 const r = computeGarageOrder(rides, vehicles, { nowMs: Date.now(), day, switchHour: Number(process.env.GARAGE_WISSELUUR ?? 12), eigenKentekens: loadEigenKentekens() });
 
 console.log(`\nInrijvolgorde voor ${r.dagLabel} (${rides.length} ritten opgehaald rond nu):\n`);

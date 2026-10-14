@@ -11,8 +11,13 @@
     "garage": "node scripts/garage-proef.js",
     "vlucht": "node scripts/vlucht-proef.js"
   },
-  "engines": { "node": ">=20.0.0" },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "license": "UNLICENSED",
   "private": true,
-  "dependencies": { "dotenv": "^16.4.5" }
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "node-ical": "^0.20.1"
+  }
 }

@@ -48,6 +48,9 @@ export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 1
   // Eén kaart per fysieke auto: taxiID kan voor dezelfde auto meerdere
   // voertuig-id's hebben (bv. per chauffeur). Id's met hetzelfde kenteken
   // worden samengevoegd; een id zonder kenteken telt als eigen auto.
+  // Kenteken altijd in dezelfde schrijfwijze tonen (taxiID geeft soms "GHN49K").
+  const canonMap = new Map((eigenKentekens ?? []).filter((k) => k.includes("-")).map((k) => [normPlate(k), k.toUpperCase()]));
+  const canon = (k) => canonMap.get(normPlate(k)) ?? String(k).toUpperCase();
   const carKey = (id) => {
     const k = vehicles[id]?.kenteken;
     return k ? `k:${k.replace(/[^A-Z0-9]/gi, "").toUpperCase()}` : `id:${id}`;
@@ -78,7 +81,7 @@ export function computeGarageOrder(rides, vehicles, { nowMs, day, switchHour = 1
       vehicleId,
       vehicleIds: [...ids],
       chauffeursMetRit: new Set(list.map((r) => r.vehicleId)).size,
-      kenteken: info?.kenteken ?? null,
+      kenteken: info?.kenteken ? canon(info.kenteken) : null,
       naam: info?.naam ?? null,
       bekend: Boolean(info),
       aantalRitten: list.length,

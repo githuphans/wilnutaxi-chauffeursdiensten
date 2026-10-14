@@ -28,6 +28,11 @@ alleen ritreferentie, tijd, plaatsnaam en vluchtnummer.
 - Alleen de eigen auto's uit `config/eigen-autos.json` staan in de rij. Auto's van
   anderen (bv. ZZP'ers) met ritten worden onderaan apart vermeld. Komt er een
   eigen auto bij, zet het kenteken in dat bestand.
+- **Rooster:** voor chauffeurs in `config/rooster.json` (nu Han) leest de app
+  de diensten uit Google Agenda (`ROOSTER_ICS_URL`). Een dienst telt als de
+  titel het zoekwoord bevat (bv. "HAN") en er een eigen kenteken bij staat
+  (meestal in de geboekte auto/locatie). Het rooster gaat voor op de auto in
+  de chauffeursapp; wijkt de app af, dan staat er een gele melding.
 - Een andere dag bekijken: `/?datum=2026-10-13`.
 - De deur staat links, met de auto die het eerst weg moet ernaast. Deur rechts: zet `&deur=rechts` achter de link.
 

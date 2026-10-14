@@ -183,7 +183,10 @@ export function cityOf(place) {
     const candidate = parts.at(-1).replace(/^\d{4}\s?[A-Z]{2}\s+/, "").replace(/^\d{4,5}\s+/, "").trim();
     if (candidate && !/\d/.test(candidate) && candidate.length <= 40) return candidate;
   }
-  return null;
+  // Geen adresregel: dan een korte naam zonder cijfers, bv. "Eindhoven Airport"
+  // (zo staat de luchthaven soms alleen in `internationalAlias`).
+  const naam = strings.map((t) => t.trim()).find((t) => t && t.length <= 40 && !/\d/.test(t) && !t.includes(","));
+  return naam ?? null;
 }
 
 /** Alleen de velden die we nodig hebben -- geen namen, telefoonnummers of adressen. */
