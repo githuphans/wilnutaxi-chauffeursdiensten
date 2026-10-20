@@ -129,7 +129,38 @@ export function createTaxiIdClient({
     return value;
   }
 
-  return { getUpcomingRides, fetchRidesBetween, getVehicle };
+  /**
+   * Actieve auto van een chauffeur: GET /drivers/<id> geeft `activeVehicleId`
+   * (de auto die de chauffeur nu in zijn app gebruikt; zo toont het portaal
+   * het ook). Alleen dat id wordt bewaard, verder niets van de chauffeur.
+   * Getest op 20-10-2026. Cache zoals bij voertuigen.
+   */
+  const driverCache = new Map();
+  async function getActiveVehicleId(driverId) {
+    const hit = driverCache.get(driverId);
+    if (hit && hit.expiresAt > now()) return hit.value;
+    let value = null;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      const res = await fetchImpl(`${baseUrl}/drivers/${encodeURIComponent(driverId)}`, {
+        headers: { Authorization: apiKey, "Content-Type": "application/json" },
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
+      if (res.ok) {
+        const d = await res.json();
+        value = typeof d?.activeVehicleId === "string" && d.activeVehicleId ? d.activeVehicleId : null;
+      } else {
+        log.warn?.(`Chauffeur opzoeken in taxiID: HTTP ${res.status}`);
+      }
+    } catch (err) {
+      log.warn?.(`Chauffeur opzoeken in taxiID mislukt: ${err.message}`);
+    }
+    driverCache.set(driverId, { value, expiresAt: now() + (value ? vehicleCacheMs : 5 * 60000) });
+    return value;
+  }
+
+  return { getUpcomingRides, fetchRidesBetween, getVehicle, getActiveVehicleId };
 }
 
 export function isCanceled(ride) {

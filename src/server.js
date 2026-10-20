@@ -15,7 +15,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createTaxiIdClient } from "./taxiid.js";
 import { computeGarageOrder } from "./garage.js";
-import { loadVehicles, resolveVehicles, loadEigenKentekens } from "./vehicles.js";
+import { loadVehicles, resolveVehicles, loadEigenKentekens, rittenMetActieveAuto } from "./vehicles.js";
 import { createRoosterBron, loadRoosterConfig, pasRoosterToe } from "./rooster.js";
 import { planDay } from "./garage.js";
 import { createStore } from "./store.js";
@@ -62,7 +62,10 @@ const server = createServer(async (req, res) => {
       } catch (err) {
         console.warn(`voertuigen.json lezen mislukt, vorige versie blijft: ${err.message}`);
       }
-      const { rides, fetchedAt, stale, error } = await taxiId.getUpcomingRides({ force: url.searchParams.has("vers") });
+      const opgehaald = await taxiId.getUpcomingRides({ force: url.searchParams.has("vers") });
+      const { fetchedAt, stale, error } = opgehaald;
+      // Auto via de chauffeur (zoals het portaal), niet via het id in de rit.
+      const rides = await rittenMetActieveAuto(opgehaald.rides, taxiId);
       const eigen = loadEigenKentekens();
       const nowMs = Date.now();
       const dag = day ?? planDay(nowMs, SWITCH_HOUR);

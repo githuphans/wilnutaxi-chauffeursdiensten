@@ -157,3 +157,35 @@ test("kenteken in vaste schrijfwijze en luchthaven als plaatsnaam", () => {
   assert.equal(r.inrijvolgorde[0].kenteken, "GHN-49-K");
   assert.equal(r.inrijvolgorde[0].eersteRit.naar, "Eindhoven Airport");
 });
+
+import { rittenMetActieveAuto } from "../src/vehicles.js";
+import { pasRoosterToe } from "../src/rooster.js";
+test("auto via de chauffeur (activeVehicleId), niet via het achterlopende id in de rit (20-10-2026)", async () => {
+  // Zoals 21-10-2026: rit van Han (04:30) en drie ritten van Ronald (13:30, 16:30, 22:10).
+  const rides = [
+    ride("RIT_HAN", "2026-10-21T02:30:00Z", { driverId: "D_HAN" }),
+    ride("RIT_OUD", "2026-10-21T11:30:00Z", { driverId: "D_RON" }),
+    ride("RIT_OUD", "2026-10-21T14:30:00Z", { driverId: "D_RON" }),
+    ride("RIT_OUD", "2026-10-21T20:10:00Z", { driverId: "D_RON" }),
+  ];
+  const actief = { D_HAN: "HAN", D_RON: "RON" };
+  const plaat = { RIT_HAN: "GHN-49-K", RIT_OUD: "GNP-46-F", HAN: "GGZ-37-R", RON: "GHN49K" };
+  const taxiId = { getActiveVehicleId: async (d) => actief[d], getVehicle: async (id) => ({ kenteken: plaat[id], naam: null }) };
+  const metAuto = await rittenMetActieveAuto(rides, taxiId);
+  assert.equal(metAuto[1].vehicleId, "RON");
+  assert.equal(rides[1].vehicleId, "RIT_OUD"); // origineel onveranderd
+  const v = await resolveVehicles({}, metAuto, taxiId);
+  // rooster: Han rijdt woensdag de GHN-49-K
+  const { vehicles } = pasRoosterToe(v, [{ naam: "Han", kenteken: "GHN-49-K", voertuigIds: ["HAN"] }]);
+  const r = computeGarageOrder(metAuto, vehicles, { nowMs: Date.parse("2026-10-20T15:15:00Z"), eigenKentekens: ["GGZ-37-R", "GHN-49-K", "GNP-46-F"] });
+  const ghn = r.inrijvolgorde.find((c) => c.kenteken === "GHN-49-K");
+  assert.equal(ghn.aantalRitten, 4);
+  assert.equal(ghn.eersteRit.tijd, "04:30");
+  assert.equal(r.inrijvolgorde.find((c) => c.kenteken === "GNP-46-F").aantalRitten, 0);
+});
+
+test("zonder antwoord over de chauffeur blijft het id uit de rit", async () => {
+  const rides = [ride("A", "2026-10-21T02:30:00Z", { driverId: "D" })];
+  const out = await rittenMetActieveAuto(rides, { getActiveVehicleId: async () => null });
+  assert.equal(out[0].vehicleId, "A");
+});

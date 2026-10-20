@@ -13,11 +13,11 @@ import { computeGarageOrder } from "../src/garage.js";
 import { cityOf, isCanceled } from "../src/taxiid.js";
 import { createRoosterBron, loadRoosterConfig, pasRoosterToe } from "../src/rooster.js";
 import { planDay } from "../src/garage.js";
-import { loadVehicles, resolveVehicles, loadEigenKentekens } from "../src/vehicles.js";
+import { loadVehicles, resolveVehicles, loadEigenKentekens, rittenMetActieveAuto } from "../src/vehicles.js";
 
 const day = process.argv[2];
 const client = createTaxiIdClient();
-const { rides } = await client.getUpcomingRides();
+const rides = await rittenMetActieveAuto((await client.getUpcomingRides()).rides, client);
 let vehicles = await resolveVehicles(loadVehicles(), rides, client);
 const dagVoorRooster = day ?? planDay(Date.now(), Number(process.env.GARAGE_WISSELUUR ?? 12));
 const bron = createRoosterBron();

@@ -30,6 +30,24 @@ export function loadVehicles(path = process.env.VOERTUIGEN_PAD || DEFAULT_PATH) 
 }
 
 /**
+ * Het voertuig-id in een rit loopt soms achter (20-10-2026: rit van Ronald
+ * stond op een id dat nu GNP-46-F is, terwijl hij en het portaal GHN49K
+ * gebruiken). Daarom: heeft de rit een chauffeur, dan geldt de auto die die
+ * chauffeur nu actief heeft (`activeVehicleId`), net als in het portaal.
+ * Zonder chauffeur of zonder antwoord blijft het id uit de rit staan.
+ * Geeft nieuwe rit-objecten terug; de originelen blijven onveranderd.
+ */
+export async function rittenMetActieveAuto(rides, taxiId) {
+  if (!taxiId?.getActiveVehicleId) return rides;
+  const driverIds = [...new Set(rides.filter((r) => r?.driverId && !String(r.status ?? "").toLowerCase().includes("cancel")).map((r) => r.driverId))];
+  const actief = new Map(await Promise.all(driverIds.map(async (id) => [id, await taxiId.getActiveVehicleId(id)])));
+  return rides.map((r) => {
+    const v = r?.driverId ? actief.get(r.driverId) : null;
+    return v && v !== r.vehicleId ? { ...r, vehicleId: v, ritVehicleId: r.vehicleId } : r;
+  });
+}
+
+/**
  * Actuele koppeling voertuig-id -> kenteken.
  *
  * In taxiID hoort een voertuig-id bij een chauffeur; het kenteken erbij is wat

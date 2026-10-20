@@ -149,13 +149,16 @@ Met een Raspberry Pi (Raspberry Pi OS met bureaublad):
 - `public/garage.html`: het scherm
 - `config/voertuigen.json`: koppeltabel voertuig-id → kenteken
 
-## Bekende punten (stand 13 oktober 2026)
+## Bekende punten (stand 20 oktober 2026)
 
-- **Voertuig-id's:** in taxiID hoort een voertuig-id bij een chauffeur; het
-  kenteken is de auto die de chauffeur in zijn app heeft gekozen en kan per
-  dienst wisselen. De app zoekt daarom elk id steeds actueel op via
-  `GET /vehicles/<id>` (10 minuten gecachet) en voegt id's met hetzelfde
-  kenteken samen tot één kaart. `config/voertuigen.json` is alleen reserve.
+- **Welke auto bij een rit:** het voertuig-id in de rit loopt soms achter
+  (20-10-2026: rit van Ronald stond op een id dat nu GNP-46-F is). Het scherm
+  kijkt daarom, net als het portaal, naar de chauffeur van de rit:
+  `GET /drivers/<id>` → `activeVehicleId` (de auto die hij nu in zijn app
+  heeft), en zoekt dan het kenteken op via `GET /vehicles/<id>` (beide 10
+  minuten gecachet). Zonder chauffeur of antwoord geldt het id uit de rit.
+  Id's met hetzelfde kenteken worden één kaart. `config/voertuigen.json` is
+  alleen reserve. Controleren: `node scripts/chauffeur-proef.js 2026-10-21`.
   Heeft een chauffeur in zijn app nog de auto van zijn vorige dienst
   geselecteerd, dan toont het scherm die auto: dat is niet op te lossen.
 - **`include` met vehicle en/of driver** in de rittenlijst geeft HTTP 500; niet gebruiken.
