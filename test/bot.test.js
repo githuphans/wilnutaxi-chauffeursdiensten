@@ -155,3 +155,13 @@ test("eerder onterecht gemelde landing wordt hersteld en het volgen gaat door", 
   assert.equal(fs.done, false);
   assert.equal(fs.leg.dep.scheduled, "2026-10-13T10:25:00.000Z");
 });
+
+test("Telegram-naam wordt bijgewerkt als die in het profiel verandert", async () => {
+  const s = setup();
+  await s.msg("wnt2026");
+  assert.equal(s.state.chats["42"].naam, "Piet");
+  const { createBotHandler } = await import("../src/telegram.js");
+  const handle = createBotHandler({ store: { state: s.state, save() {} }, tracker: s.tracker, env: { BOT_TOEGANGSCODE: "wnt2026" } });
+  await handle({ chat: { id: 42 }, from: { first_name: "Pieter" }, text: "/help" });
+  assert.equal(s.state.chats["42"].naam, "Pieter");
+});

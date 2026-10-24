@@ -112,6 +112,12 @@ export function createBotHandler({ store, tracker, belronde = null, env = proces
       return "Hallo! Dit is de vluchtbot van Wilnu Taxi. Stuur eerst de toegangscode die je van de centrale hebt gekregen.";
     }
 
+    // Telegram-naam bijwerken als de chauffeur die in zijn profiel heeft veranderd.
+    if (name && chats[chatId].naam !== name) {
+      chats[chatId].naam = name;
+      store.save();
+    }
+
     switch (cmd) {
       case "/start":
       case "/help":
