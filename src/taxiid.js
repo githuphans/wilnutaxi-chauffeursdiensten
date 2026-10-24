@@ -160,7 +160,93 @@ export function createTaxiIdClient({
     return value;
   }
 
-  return { getUpcomingRides, fetchRidesBetween, getVehicle, getActiveVehicleId };
+  /**
+   * Naam van een chauffeur (voor de belherinnering: koppelen aan Telegram en
+   * het overzicht voor de centrale). Uit GET /drivers/<id> wordt ALLEEN de
+   * naam bewaard; telefoonnummer, adres e.d. worden niet gebruikt.
+   * Gevonden: 12 uur in de cache, fout: 10 minuten.
+   */
+  const driverNameCache = new Map();
+  async function getDriver(driverId) {
+    const hit = driverNameCache.get(driverId);
+    if (hit && hit.expiresAt > now()) return hit.value;
+    let value = null;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      const res = await fetchImpl(`${baseUrl}/drivers/${encodeURIComponent(driverId)}`, {
+        headers: { Authorization: apiKey, "Content-Type": "application/json" },
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
+      if (res.ok) value = { id: driverId, naam: driverNaam(await res.json()) };
+      else log.warn?.(`Chauffeur opzoeken in taxiID: HTTP ${res.status}`);
+    } catch (err) {
+      log.warn?.(`Chauffeur opzoeken in taxiID mislukt: ${err.message}`);
+    }
+    driverNameCache.set(driverId, { value, expiresAt: now() + (value ? 12 * 3600000 : 10 * 60000) });
+    return value;
+  }
+
+  /**
+   * Alle chauffeurs van het bedrijf (id + naam), voor de keuzelijst "wie ben
+   * je?". Of taxiID deze lijst geeft is niet zeker; lukt het niet, dan
+   * `null` en kiest de bot uit de chauffeurs die in de ritten staan.
+   */
+  let driverListCache = null;
+  async function listDrivers() {
+    if (driverListCache && driverListCache.expiresAt > now()) return driverListCache.value;
+    let value = null;
+    try {
+      const filter = encodeURIComponent(JSON.stringify({ limit: 200 }));
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      const res = await fetchImpl(`${baseUrl}/companies/${companyId}/drivers?filter=${filter}`, {
+        headers: { Authorization: apiKey, "Content-Type": "application/json" },
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
+      if (res.ok) {
+        const body = await res.json();
+        const list = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : null;
+        if (list) {
+          value = list
+            .filter((d) => d && d.active !== false && d.deleted !== true && d.archived !== true)
+            .map((d) => ({ id: String(d.id ?? d._id ?? ""), naam: driverNaam(d) }))
+            .filter((d) => d.id);
+          for (const d of value) driverNameCache.set(d.id, { value: d, expiresAt: now() + 12 * 3600000 });
+        }
+      } else {
+        log.warn?.(`Chauffeurslijst uit taxiID: HTTP ${res.status}`);
+      }
+    } catch (err) {
+      log.warn?.(`Chauffeurslijst uit taxiID mislukt: ${err.message}`);
+    }
+    driverListCache = { value, expiresAt: now() + (value ? 3600000 : 15 * 60000) };
+    return value;
+  }
+
+  return { getUpcomingRides, fetchRidesBetween, getVehicle, getActiveVehicleId, getDriver, listDrivers };
+}
+
+/** Naam uit een taxiID-chauffeur (veldnamen zijn niet overal gelijk). */
+export function driverNaam(d) {
+  if (!d || typeof d !== "object") return null;
+  const s = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const bron = d.user && typeof d.user === "object" ? [d, d.user] : [d];
+  for (const o of bron) {
+    const voor = s(o.firstName) ?? s(o.firstname) ?? s(o.first_name);
+    const achter = s(o.lastName) ?? s(o.lastname) ?? s(o.last_name);
+    if (voor || achter) return [voor, achter].filter(Boolean).join(" ");
+    const heel = s(o.fullName) ?? s(o.name) ?? s(o.displayName);
+    if (heel) return heel;
+  }
+  return null;
+}
+
+/** Chauffeur-id van een rit (taxiID geeft meestal `driverId`). */
+export function driverIdOf(ride) {
+  const d = ride?.driver;
+  const v = ride?.driverId ?? (typeof d === "string" ? d : d?.id ?? d?._id);
+  return typeof v === "string" && v ? v : null;
 }
 
 export function isCanceled(ride) {

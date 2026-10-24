@@ -28,21 +28,32 @@ export function createTelegram({ token = process.env.TELEGRAM_BOT_TOKEN, fetchIm
     }
   }
 
-  const sendMessage = (chatId, text) => call("sendMessage", { chat_id: chatId, text, disable_web_page_preview: true });
+  /** `extra` kan o.a. `reply_markup` (knoppen) bevatten. */
+  const sendMessage = (chatId, text, extra = {}) => call("sendMessage", { chat_id: chatId, text, disable_web_page_preview: true, ...extra });
+  const editMessageText = (chatId, messageId, text, extra = {}) =>
+    call("editMessageText", { chat_id: chatId, message_id: messageId, text, disable_web_page_preview: true, ...extra });
+  const removeButtons = (chatId, messageId) =>
+    call("editMessageReplyMarkup", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [] } });
+  const answerCallback = (id, text) => call("answerCallbackQuery", { callback_query_id: id, text: text ?? undefined });
 
-  /** Blijft berichten ophalen tot `stop()` wordt aangeroepen. */
-  function startPolling(onMessage) {
+  /**
+   * Blijft berichten ophalen tot `stop()` wordt aangeroepen.
+   * `onCallback` krijgt een tik op een knop (callback_query).
+   */
+  function startPolling(onMessage, onCallback = async () => {}) {
     let offset = 0;
     let stopped = false;
     (async () => {
       await call("deleteWebhook", {}).catch(() => {});
       while (!stopped) {
         try {
-          const updates = await call("getUpdates", { offset, timeout: 50, allowed_updates: ["message"] }, 65000);
+          const updates = await call("getUpdates", { offset, timeout: 50, allowed_updates: ["message", "callback_query"] }, 65000);
           for (const u of updates) {
             offset = u.update_id + 1;
             if (u.message?.text) {
               await onMessage(u.message).catch((err) => log.error?.(`Bericht verwerken mislukt: ${err.message}`));
+            } else if (u.callback_query) {
+              await onCallback(u.callback_query).catch((err) => log.error?.(`Knop verwerken mislukt: ${err.message}`));
             }
           }
         } catch (err) {
@@ -55,7 +66,7 @@ export function createTelegram({ token = process.env.TELEGRAM_BOT_TOKEN, fetchIm
     return { stop: () => (stopped = true) };
   }
 
-  return { sendMessage, startPolling, call };
+  return { sendMessage, editMessageText, removeButtons, answerCallback, startPolling, call };
 }
 
 export const HELP = [
@@ -65,13 +76,16 @@ export const HELP = [
   "• /mijn: welke vluchten je volgt en de laatste stand",
   "• /stop KL1234: stoppen met één vlucht (/stop zonder nummer: alles)",
   "Je krijgt een bericht bij vertraging, opstijgen, een nieuwe verwachte aankomst en de landing.",
+  "",
+  "Belherinnering: elke middag stuur ik je ritten van morgen, zodat je je passagiers kunt bellen. Tik daarna op Gebeld.",
+  "• /ikben: je naam in taxiID (opnieuw) kiezen",
 ].join("\n");
 
 /**
  * Verwerkt één binnenkomend bericht. Los van Telegram zelf, zodat het te testen is.
- * @returns {Promise<string|null>} het antwoord
+ * @returns {Promise<string|{text: string, reply_markup: object}|null>} het antwoord (een object als er knoppen bij horen)
  */
-export function createBotHandler({ store, tracker, env = process.env, notifyAdmins = async () => {}, now = () => Date.now() }) {
+export function createBotHandler({ store, tracker, belronde = null, env = process.env, notifyAdmins = async () => {}, now = () => Date.now() }) {
   const code = String(env.BOT_TOEGANGSCODE ?? "").trim();
   const admins = new Set(String(env.BOT_BEHEER_CHAT_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean));
 
@@ -108,6 +122,14 @@ export function createBotHandler({ store, tracker, env = process.env, notifyAdmi
         return tracker.list({ chatId });
       case "/stop":
         return tracker.unsubscribe({ chatId, text: arg });
+      case "/ikben":
+        return belronde?.actief ? belronde.koppelVraag(chatId) : HELP;
+      case "/belronde":
+        if (!admins.has(chatId) || !belronde?.actief) return HELP;
+        return belronde.stand();
+      case "/koppelingen":
+        if (!admins.has(chatId) || !belronde?.actief) return HELP;
+        return belronde.koppelingen();
       case "/gebruik": {
         if (!admins.has(chatId)) return HELP;
         const u = tracker.usage(now());

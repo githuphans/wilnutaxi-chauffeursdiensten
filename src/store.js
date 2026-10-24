@@ -8,7 +8,9 @@
  *   (sleutel SPACES_STATE_KEY, standaard "chauffeursdiensten/state.json").
  *
  * Er staan GEEN klantgegevens in: alleen Telegram-chat-id + voornaam van de
- * chauffeur, vluchtnummers, ritreferentie/tijd/plaatsnamen en vluchttijden.
+ * chauffeur, vluchtnummers, ritreferentie/tijd/plaatsnamen en vluchttijden,
+ * en voor de belherinnering: taxiID-chauffeur-id + naam en per rit
+ * referentie, tijd en of er gebeld is.
  */
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -18,7 +20,7 @@ import { createSpacesClient } from "./spacesClient.js";
 const DEFAULT_FILE = fileURLToPath(new URL("../data/state.json", import.meta.url));
 
 export function emptyState() {
-  return { chats: {}, subscriptions: [], flights: {}, usage: { day: null, units: 0 } };
+  return { chats: {}, subscriptions: [], flights: {}, usage: { day: null, units: 0 }, bel: { dagen: {} } };
 }
 
 export function createStore({ env = process.env, log = console } = {}) {

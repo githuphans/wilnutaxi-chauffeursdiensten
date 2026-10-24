@@ -22,6 +22,7 @@ import { createStore } from "./store.js";
 import { createAeroDataBox } from "./flights/aerodatabox.js";
 import { createTracker } from "./flights/tracker.js";
 import { createTelegram, createBotHandler } from "./telegram.js";
+import { createBelronde } from "./belronde.js";
 
 const env = process.env;
 const PORT = Number(env.PORT) || 3000;
@@ -108,13 +109,35 @@ if (env.TELEGRAM_BOT_TOKEN) {
     for (const id of admins) await telegram.sendMessage(id, text).catch(() => {});
   };
   const tracker = createTracker({ store, api: createAeroDataBox(), taxiId, send: (chatId, text) => telegram.sendMessage(chatId, text) });
-  const handle = createBotHandler({ store, tracker, notifyAdmins });
-  const poller = telegram.startPolling(async (message) => {
-    const reply = await handle(message);
-    if (reply) await telegram.sendMessage(message.chat.id, reply);
+  const belronde = createBelronde({
+    store,
+    taxiId,
+    send: (chatId, text, extra) => telegram.sendMessage(chatId, text, extra),
+    editText: (chatId, messageId, text) => telegram.editMessageText(chatId, messageId, text),
+    removeButtons: (chatId, messageId) => telegram.removeButtons(chatId, messageId),
   });
-  const interval = setInterval(() => tracker.tick().catch((err) => console.error(`Vluchtcontrole mislukt: ${err.message}`)), 60000);
-  console.log(`Vluchtbot gestart (opslag: ${store.kind}).`);
+  const handle = createBotHandler({ store, tracker, belronde, notifyAdmins });
+  const reageer = async (chatId, reply) => {
+    if (!reply) return;
+    if (typeof reply === "string") await telegram.sendMessage(chatId, reply);
+    else await telegram.sendMessage(chatId, reply.text, { reply_markup: reply.reply_markup });
+  };
+  const poller = telegram.startPolling(
+    async (message) => {
+      await reageer(message.chat.id, await handle(message));
+      // Net toegelaten en nog niet gekoppeld aan een taxiID-chauffeur? Dan meteen "wie ben je?".
+      await reageer(message.chat.id, await belronde.naBericht(message.chat.id));
+    },
+    async (cb) => {
+      const antwoord = await belronde.knopGedrukt(cb);
+      await telegram.answerCallback(cb.id, antwoord).catch(() => {});
+    },
+  );
+  const interval = setInterval(() => {
+    tracker.tick().catch((err) => console.error(`Vluchtcontrole mislukt: ${err.message}`));
+    belronde.tick().catch((err) => console.error(`Belherinnering mislukt: ${err.message}`));
+  }, 60000);
+  console.log(`Vluchtbot gestart (opslag: ${store.kind}; belherinnering ${belronde.actief ? "aan" : "uit"}).`);
 
   const shutdown = async () => {
     poller.stop();

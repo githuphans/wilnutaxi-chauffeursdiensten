@@ -1,6 +1,6 @@
 # Wilnu Taxi chauffeursdiensten
 
-Kleine losse app (dus niet in het boekingsformulier) met twee functies:
+Kleine losse app (dus niet in het boekingsformulier) met drie functies:
 
 1. **Garagescherm**: toont op de tv in de garage in welke volgorde de auto's
    naar binnen moeten. De garage is één rij: wie er als laatste in rijdt,
@@ -10,7 +10,11 @@ Kleine losse app (dus niet in het boekingsformulier) met twee functies:
    en krijgt een bericht bij vertraging, opstijgen, een nieuwe verwachte
    aankomst, de landing (met bagageband als die bekend is) en annulering.
 
-Beide lezen de ritten uit taxiID (productie, **alleen lezen**). Er komen geen
+3. **Belherinnering** (via dezelfde bot): elke middag om 17:00 krijgt iedere
+   chauffeur met ritten voor morgen een bericht om zijn passagiers te bellen,
+   met een knop "Gebeld ✅". De centrale krijgt om 20:00 een overzicht.
+
+Alle drie lezen de ritten uit taxiID (productie, **alleen lezen**). Er komen geen
 klantnamen, telefoonnummers of adressen in het scherm, de bot of de opslag;
 alleen ritreferentie, tijd, plaatsnaam en vluchtnummer.
 
@@ -56,6 +60,30 @@ alleen ritreferentie, tijd, plaatsnaam en vluchtnummer.
   Een vlucht van 2 uur kost zo ongeveer **15 aanroepen**.
 - Dagbudget (`FLIGHT_DAILY_UNITS`) bewaakt het abonnement; is het op, dan
   wachten de controles en krijgen nieuwe aanmeldingen een melding.
+
+**Belherinnering**
+- Gaat vanzelf op basis van de planning in taxiID; niemand hoeft iets in te
+  stellen. Ook ZZP'ers krijgen hem, als ze in de bot zitten.
+- **Koppelen (één keer per chauffeur):** na de toegangscode vraagt de bot
+  "wie ben je?" met de chauffeurs uit taxiID als knoppen. Opnieuw kiezen:
+  `/ikben`. Chauffeurs die al in de bot zaten krijgen die vraag één keer
+  vanzelf (overdag). Beheer krijgt een bericht bij elke koppeling.
+- **17:00** (`BEL_HERINNERING_TIJD`): bericht met de ritten van morgen
+  (tijd, ritreferentie, plaatsen, vluchtnummer) en de knop "Gebeld ✅".
+  Namen en telefoonnummers van passagiers staan in de taxiID-app van de
+  chauffeur, niet in het bericht.
+- **Tot 21:30** (`BEL_LAATST_TIJD`) wordt elk half uur gekeken of er ritten
+  bij zijn gekomen, verplaatst of vervallen; de chauffeur krijgt dan een
+  extra bericht (bij nieuwe of verplaatste ritten weer met de knop).
+- **19:30** (`BEL_NOGMAALS_TIJD`): herinnering voor wie nog niet heeft afgevinkt.
+- **20:00** (`BEL_OVERZICHT_TIJD`): overzicht voor `BOT_BEHEER_CHAT_IDS`:
+  ✅ gebeld, ⏳ nog niet afgevinkt, ❓ chauffeur niet gekoppeld aan de bot,
+  ⚠️ ritten zonder chauffeur.
+- Beheer: `/belronde` (stand voor morgen; vóór 17:00 een voorproef),
+  `/koppelingen` (welke chat bij welke chauffeur hoort).
+- Uitzetten: `BEL_HERINNERING=uit`.
+- Proberen zonder iets te versturen: `npm run bellen` (of
+  `npm run bellen -- 2026-10-26`).
 
 ## Eerst lokaal proberen (op je eigen pc)
 
@@ -145,6 +173,7 @@ Met een Raspberry Pi (Raspberry Pi OS met bureaublad):
 - `src/taxiid.js`: ritten ophalen (alleen lezen, eigen dagfilter, pagineren)
 - `src/flights/`: vluchtnummers, AeroDataBox, meldingen en controleschema
 - `src/telegram.js`: de bot
+- `src/belronde.js`: de belherinnering
 - `src/store.js`: opslag (bestand of Spaces)
 - `public/garage.html`: het scherm
 - `config/voertuigen.json`: koppeltabel voertuig-id → kenteken
