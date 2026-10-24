@@ -20,7 +20,7 @@ import { createSpacesClient } from "./spacesClient.js";
 const DEFAULT_FILE = fileURLToPath(new URL("../data/state.json", import.meta.url));
 
 export function emptyState() {
-  return { chats: {}, subscriptions: [], flights: {}, usage: { day: null, units: 0 }, bel: { dagen: {} } };
+  return { chats: {}, subscriptions: [], flights: {}, usage: { day: null, units: 0 }, bel: { dagen: {}, koppelVersie: 2 } };
 }
 
 export function createStore({ env = process.env, log = console } = {}) {

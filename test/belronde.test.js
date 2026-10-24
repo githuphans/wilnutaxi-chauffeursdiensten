@@ -262,3 +262,13 @@ test("namen onbekend: overzicht noemt de eerste rit en niemand wordt 'gekoppeld-
   assert.equal(state.chats["1"].koppelGevraagd, undefined); // later opnieuw proberen
   assert.ok(handleZonderNamen);
 });
+
+test("oude 'gevraagd'-markering zonder koppeling wordt eenmalig gewist", async () => {
+  const s = setup({ chats: { "50": { toegelaten: true, naam: "Hans", koppelGevraagd: "2026-10-24T06:45:00Z" } } });
+  delete s.state.bel.koppelVersie; // opslag van vóór deze versie
+  await s.at(om("09:00"));
+  assert.equal(s.aan(50).length, 1);
+  assert.match(s.aan(50)[0].text, /Tik op je naam/);
+  await s.at(om("09:01"));
+  assert.equal(s.aan(50).length, 1);
+});

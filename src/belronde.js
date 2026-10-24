@@ -266,6 +266,13 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
 
   /** Chauffeurs die al in de bot zaten voor de belherinnering bestond: één keer vragen (overdag). */
   async function vraagOudeChats(t) {
+    // Eenmalig (24-10-2026): de eerste versie zette "gevraagd" ook als de vraag
+    // niet verstuurd kon worden (namen niet herkend). Die markering wissen.
+    if ((st().koppelVersie ?? 1) < 2) {
+      for (const c of Object.values(chats())) if (c.driverId === undefined) delete c.koppelGevraagd;
+      st().koppelVersie = 2;
+      store.save();
+    }
     const m = minuutVanDag(t);
     if (m < 8 * 60 || m > T.laatst) return;
     for (const [chatId, c] of Object.entries(chats())) {
