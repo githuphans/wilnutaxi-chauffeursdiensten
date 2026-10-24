@@ -234,7 +234,24 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
   }
 
   // --- koppelen: wie ben je? --------------------------------------------------------
-  async function koppelVraag(chatId) {
+  /**
+   * Actieve chauffeurs = chauffeurs met een rit in de afgelopen 30 of komende
+   * 14 dagen. Zo staan oud-chauffeurs niet in de keuzelijst. 6 uur gecachet.
+   */
+  let actiefCache = null;
+  async function actieveChauffeurIds() {
+    const t = now();
+    if (actiefCache && actiefCache.tot > t) return actiefCache.ids;
+    let ids = null;
+    if (taxiId.fetchRidesBetween) {
+      const rides = await veilig(() => taxiId.fetchRidesBetween(t - 30 * 86400000, t + 14 * 86400000), "actieve chauffeurs ophalen");
+      if (rides) ids = new Set(rides.filter((r) => !isCanceled(r)).map(driverIdOf).filter(Boolean));
+    }
+    actiefCache = { ids, tot: t + (ids ? 6 * 3600000 : 15 * 60000) };
+    return ids;
+  }
+
+  async function keuzelijst({ alle = false, chatId } = {}) {
     let lijst = await veilig(() => taxiId.listDrivers?.(), "chauffeurslijst ophalen");
     if (!lijst?.length) {
       // Geen lijst uit taxiID: kies uit de chauffeurs die in de ritten staan.
@@ -243,17 +260,52 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
       lijst = [];
       for (const id of ids) lijst.push({ id, naam: await naamVan(id) });
     }
-    lijst = lijst.filter((d) => d.id && d.naam).sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
+    lijst = lijst.filter((d) => d.id && d.naam);
+    let ingekort = false;
+    if (!alle) {
+      const actief = await actieveChauffeurIds();
+      const eigen = chats()[String(chatId)]?.driverId;
+      const kort = actief?.size ? lijst.filter((d) => actief.has(d.id) || d.id === eigen) : lijst;
+      if (kort.length) {
+        ingekort = kort.length < lijst.length;
+        lijst = kort;
+      }
+    }
+    return { lijst: lijst.sort((a, b) => a.naam.localeCompare(b.naam, "nl")), ingekort };
+  }
+
+  function knoppen(lijst, ingekort) {
+    const rijen = lijst.slice(0, 60).map((d) => [{ text: d.naam, callback_data: `ikben:${d.id}` }]);
+    if (ingekort) rijen.push([{ text: "Mijn naam staat er niet bij", callback_data: "ikben:alle" }]);
+    rijen.push([{ text: "Ik rijd zelf geen ritten", callback_data: "ikben:geen" }]);
+    return { inline_keyboard: rijen };
+  }
+
+  const vraagTekst = () =>
+    "📞 Elke middag om " + tijdTekst(T.eerst) + " stuur ik je de ritten van morgen, zodat je je passagiers kunt bellen. Daarvoor moet ik weten wie je bent in taxiID. Tik op je naam:";
+
+  async function koppelVraag(chatId) {
+    const { lijst, ingekort } = await keuzelijst({ chatId });
     if (!lijst.length) return "Ik kan de chauffeurs uit taxiID nu niet ophalen. Probeer het later opnieuw met /ikben.";
     const c = chats()[String(chatId)];
     if (c) c.koppelGevraagd = new Date(now()).toISOString();
     store.save();
-    const rijen = lijst.slice(0, 40).map((d) => [{ text: d.naam, callback_data: `ikben:${d.id}` }]);
-    rijen.push([{ text: "Ik rijd zelf geen ritten", callback_data: "ikben:geen" }]);
-    return {
-      text: "📞 Elke middag om " + tijdTekst(T.eerst) + " stuur ik je de ritten van morgen, zodat je je passagiers kunt bellen. Daarvoor moet ik weten wie je bent in taxiID. Tik op je naam:",
-      reply_markup: { inline_keyboard: rijen },
-    };
+    return { text: vraagTekst(), reply_markup: knoppen(lijst, ingekort) };
+  }
+
+  /** Beheer: koppeling van een chat ongedaan maken; die chat kiest dan opnieuw. */
+  async function ontkoppel(doelChatId) {
+    const c = chats()[String(doelChatId)];
+    if (!c?.toegelaten) return "Onbekend chat-id. Zie /koppelingen.";
+    const was = c.driverNaam ?? "niemand";
+    delete c.driverId;
+    delete c.driverNaam;
+    store.save();
+    const vraag = await koppelVraag(doelChatId);
+    if (typeof vraag === "object") {
+      await veilig(() => send(doelChatId, `Je koppeling als ${was} is door de centrale ongedaan gemaakt. ${vraag.text}`, { reply_markup: vraag.reply_markup }), "koppelvraag");
+    }
+    return `Koppeling van ${c.naam || "(geen naam)"} (chat ${doelChatId}) als ${was} is ongedaan gemaakt; hij krijgt opnieuw de vraag wie hij is.`;
   }
 
   /** Na een bericht van een (net) toegelaten chauffeur: nog niet gekoppeld? Dan meteen vragen. */
@@ -290,8 +342,20 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     const c = chats()[chatId];
     if (!c?.toegelaten) return null;
 
+    if (data.startsWith("ontkoppel:")) {
+      if (!isAdmin(chatId)) return null;
+      const tekst = await ontkoppel(data.slice(10));
+      await veilig(() => editText(chatId, cb.message.message_id, `${cb.message.text ?? ""}\n\n↩️ ${tekst}`), "bericht bijwerken");
+      return "Ongedaan gemaakt";
+    }
+
     if (data.startsWith("ikben:")) {
       const id = data.slice(6);
+      if (id === "alle") {
+        const { lijst } = await keuzelijst({ alle: true, chatId });
+        await veilig(() => editText(chatId, cb.message.message_id, vraagTekst(), { reply_markup: knoppen(lijst, false) }), "lijst uitbreiden");
+        return null;
+      }
       if (id === "geen") {
         c.driverId = null;
         c.driverNaam = null;
@@ -308,7 +372,15 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
         () => editText(chatId, cb.message.message_id, `Gekoppeld als ${naam}. Elke middag om ${tijdTekst(T.eerst)} krijg je je ritten van morgen. Verkeerde naam? Stuur /ikben.`),
         "bericht bijwerken",
       );
-      await naarBeheer(`Belherinnering: ${c.naam || "(geen naam)"} (chat ${chatId}) is gekoppeld als ${naam}.${anderen.length ? ` Let op: ook chat ${anderen.join(", ")} is als ${naam} gekoppeld.` : ""}`);
+      const melding = [
+        `🔗 Belherinnering: Telegram-gebruiker "${c.naam || "(geen naam)"}" (chat ${chatId}) heeft zich gekoppeld als ${naam}.`,
+        anderen.length ? `Let op: chat ${anderen.join(", ")} is ook als ${naam} gekoppeld.` : null,
+        "Klopt dat? Dan hoef je niets te doen. Klopt het niet, tik dan op Ongedaan maken.",
+      ].filter(Boolean).join("\n");
+      for (const admin of admins) {
+        if (admin === chatId) continue; // je eigen koppeling hoef je niet te controleren
+        await veilig(() => send(admin, melding, { reply_markup: { inline_keyboard: [[{ text: "Ongedaan maken", callback_data: `ontkoppel:${chatId}` }]] } }), "bericht aan beheer");
+      }
       return `Gekoppeld als ${naam}`;
     }
 
@@ -392,5 +464,5 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     }
   }
 
-  return { actief, tick, knopGedrukt, koppelVraag, naBericht, stand, koppelingen };
+  return { actief, tick, knopGedrukt, koppelVraag, naBericht, stand, koppelingen, ontkoppel };
 }

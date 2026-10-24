@@ -127,6 +127,10 @@ export function createBotHandler({ store, tracker, belronde = null, env = proces
       case "/belronde":
         if (!admins.has(chatId) || !belronde?.actief) return HELP;
         return belronde.stand();
+      case "/ontkoppel":
+        if (!admins.has(chatId) || !belronde?.actief) return HELP;
+        if (!arg) return "Gebruik: /ontkoppel <chat-id> (zie /koppelingen).";
+        return belronde.ontkoppel(arg.trim());
       case "/koppelingen":
         if (!admins.has(chatId) || !belronde?.actief) return HELP;
         return belronde.koppelingen();

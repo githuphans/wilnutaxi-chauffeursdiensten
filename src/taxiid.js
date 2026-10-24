@@ -212,7 +212,7 @@ export function createTaxiIdClient({
         const list = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : null;
         if (list) {
           value = list
-            .filter((d) => d && d.active !== false && d.deleted !== true && d.archived !== true)
+            .filter((d) => d && d.active !== false && d.deleted !== true && d.archived !== true && !/inactie|inactiv|disabled|blocked|deleted|archived|removed|suspended/i.test(String(d.status ?? "")))
             .map((d) => ({ id: String(d.id ?? d._id ?? ""), naam: driverNaam(d) }))
             .filter((d) => d.id);
           for (const d of value) driverNameCache.set(d.id, { value: d, expiresAt: now() + 12 * 3600000 });

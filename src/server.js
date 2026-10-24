@@ -113,7 +113,7 @@ if (env.TELEGRAM_BOT_TOKEN) {
     store,
     taxiId,
     send: (chatId, text, extra) => telegram.sendMessage(chatId, text, extra),
-    editText: (chatId, messageId, text) => telegram.editMessageText(chatId, messageId, text),
+    editText: (chatId, messageId, text, extra) => telegram.editMessageText(chatId, messageId, text, extra),
     removeButtons: (chatId, messageId) => telegram.removeButtons(chatId, messageId),
   });
   const handle = createBotHandler({ store, tracker, belronde, notifyAdmins });

@@ -67,7 +67,10 @@ alleen ritreferentie, tijd, plaatsnaam en vluchtnummer.
 - **Koppelen (één keer per chauffeur):** na de toegangscode vraagt de bot
   "wie ben je?" met de chauffeurs uit taxiID als knoppen. Opnieuw kiezen:
   `/ikben`. Chauffeurs die al in de bot zaten krijgen die vraag één keer
-  vanzelf (overdag). Beheer krijgt een bericht bij elke koppeling.
+  vanzelf (overdag). In de lijst staan alleen chauffeurs met een rit in de
+  afgelopen 30 of komende 14 dagen; "Mijn naam staat er niet bij" toont
+  iedereen. Beheer krijgt een bericht bij elke koppeling (behalve de eigen),
+  met een knop "Ongedaan maken"; dat kan ook met `/ontkoppel <chat-id>`.
 - **17:00** (`BEL_HERINNERING_TIJD`): bericht met de ritten van morgen
   (tijd, ritreferentie, plaatsen, vluchtnummer) en de knop "Gebeld ✅".
   Namen en telefoonnummers van passagiers staan in de taxiID-app van de

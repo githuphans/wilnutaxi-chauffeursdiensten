@@ -184,7 +184,8 @@ test("koppelen: na de toegangscode 'wie ben je?' met namen uit de ritten", async
   const antwoord = await s.bel.knopGedrukt({ id: "k", data: `ikben:${PIET}`, message: { chat: { id: 30 }, message_id: 5, text: "" } });
   assert.equal(antwoord, "Gekoppeld als Piet Jansen");
   assert.equal(s.state.chats["30"].driverId, PIET);
-  assert.match(s.aan(1).at(-1).text, /chat 30\) is gekoppeld als Piet Jansen/);
+  assert.match(s.aan(1).at(-1).text, /"Piet" \(chat 30\) heeft zich gekoppeld als Piet Jansen/);
+  assert.equal(s.aan(1).at(-1).extra.reply_markup.inline_keyboard[0][0].callback_data, "ontkoppel:30");
   // daarna krijgt hij om 17:00 zijn rit
   await s.at(om("17:00"));
   assert.match(s.aan(30).at(-1).text, /09:00  WNT-3/);
@@ -271,4 +272,53 @@ test("oude 'gevraagd'-markering zonder koppeling wordt eenmalig gewist", async (
   assert.match(s.aan(50)[0].text, /Tik op je naam/);
   await s.at(om("09:01"));
   assert.equal(s.aan(50).length, 1);
+});
+
+test("keuzelijst: alleen actieve chauffeurs, met 'staat er niet bij' voor de hele lijst; beheer kan ontkoppelen", async () => {
+  const { createBelronde } = await import("../src/belronde.js");
+  const state = emptyState();
+  state.chats["60"] = { toegelaten: true, naam: "Piet" };
+  state.chats["1"] = { toegelaten: true, naam: "Hans", driverId: null };
+  const sent = [];
+  const edits = [];
+  const t0 = om("09:00");
+  const bel = createBelronde({
+    store: { state, save() {} },
+    taxiId: {
+      async listDrivers() {
+        return [{ id: RONALD, naam: "Ronald de Vries" }, { id: PIET, naam: "Piet Jansen" }, { id: KEES, naam: "Kees Oud" }];
+      },
+      async fetchRidesBetween() {
+        return [rit("A", t0 - 5 * 86400000, RONALD), rit("B", t0 + 86400000, PIET), rit("C", t0, KEES, { status: "canceled" })];
+      },
+      async getUpcomingRides() {
+        return { rides: [], fetchedAt: t0, stale: false };
+      },
+      async getDriver(id) {
+        return { id, naam: { [RONALD]: "Ronald de Vries", [PIET]: "Piet Jansen", [KEES]: "Kees Oud" }[id] };
+      },
+    },
+    send: async (chatId, text, extra) => (sent.push({ chatId: String(chatId), text, extra }), { message_id: sent.length }),
+    editText: async (chatId, messageId, text, extra) => edits.push({ chatId, text, extra }),
+    env: { BOT_BEHEER_CHAT_IDS: "1" },
+    now: () => t0,
+    log: { warn() {}, info() {} },
+  });
+  const vraag = await bel.koppelVraag("60");
+  const labels = vraag.reply_markup.inline_keyboard.map((r) => r[0].text);
+  assert.deepEqual(labels, ["Piet Jansen", "Ronald de Vries", "Mijn naam staat er niet bij", "Ik rijd zelf geen ritten"]);
+  await bel.knopGedrukt({ id: "a", data: "ikben:alle", message: { chat: { id: 60 }, message_id: 9, text: "" } });
+  assert.deepEqual(edits.at(-1).extra.reply_markup.inline_keyboard.map((r) => r[0].text), ["Kees Oud", "Piet Jansen", "Ronald de Vries", "Ik rijd zelf geen ritten"]);
+
+  await bel.knopGedrukt({ id: "b", data: `ikben:${RONALD}`, message: { chat: { id: 60 }, message_id: 9, text: "" } });
+  assert.equal(state.chats["60"].driverId, RONALD);
+  const melding = sent.find((m) => m.chatId === "1");
+  assert.match(melding.text, /"Piet" \(chat 60\) heeft zich gekoppeld als Ronald de Vries/);
+  // beheer tikt op Ongedaan maken
+  assert.equal(await bel.knopGedrukt({ id: "c", data: "ontkoppel:60", message: { chat: { id: 1 }, message_id: 2, text: melding.text } }), "Ongedaan gemaakt");
+  assert.equal(state.chats["60"].driverId, undefined);
+  assert.match(sent.at(-1).text, /ongedaan gemaakt.*Tik op je naam/s);
+  assert.equal(sent.at(-1).chatId, "60");
+  // een chauffeur mag niet ontkoppelen
+  assert.equal(await bel.knopGedrukt({ id: "d", data: "ontkoppel:1", message: { chat: { id: 60 }, message_id: 3, text: "" } }), null);
 });
