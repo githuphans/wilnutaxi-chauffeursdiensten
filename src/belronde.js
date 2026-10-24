@@ -109,6 +109,8 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
 
   const knop = (dag, driverId) => ({ reply_markup: { inline_keyboard: [[{ text: "Gebeld ✅", callback_data: `bel:${dag}:${driverId}` }]] } });
 
+  const ritRecord = (i) => ({ t: i.t, van: i.van, naar: i.naar, vlucht: i.vlucht, gebeld: false });
+
   function eersteTekst(dag, items) {
     return [
       `📞 Morgen (${dayLabel(dag)}) heb je ${ritten(items.length)}. Wil je je passagiers vanavond even bellen om de details te controleren?`,
@@ -147,11 +149,14 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     for (const [driverId, items] of per) {
       const c = (rec.chauffeurs[driverId] = {
         naam: await naamVan(driverId),
-        ritten: Object.fromEntries(items.map((i) => [i.ref, { t: i.t, gebeld: false }])),
+        ritten: Object.fromEntries(items.map((i) => [i.ref, ritRecord(i)])),
         berichten: [],
         gebeldOp: null,
+        aan: [],
       });
-      c.berichten.push(...(await verstuur(chatsVan(driverId), eersteTekst(dag, items), knop(dag, driverId))));
+      const aan = chatsVan(driverId);
+      c.berichten.push(...(await verstuur(aan, eersteTekst(dag, items), knop(dag, driverId))));
+      c.aan.push(...aan);
     }
     store.save();
     log.info?.(`Belherinnering ${dag}: ${per.size} chauffeurs, ${zonder.length} ritten zonder chauffeur.`);
@@ -179,7 +184,7 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
 
       const c = (rec.chauffeurs[driverId] ??= { naam: await naamVan(driverId), ritten: {}, berichten: [], gebeldOp: null });
       for (const ref of weg) delete c.ritten[ref];
-      for (const i of [...nieuw, ...verplaatst]) c.ritten[i.ref] = { t: i.t, gebeld: false };
+      for (const i of [...nieuw, ...verplaatst]) c.ritten[i.ref] = ritRecord(i);
       const opnieuwBellen = nieuw.length + verplaatst.length > 0;
       if (opnieuwBellen) c.gebeldOp = null;
 
@@ -188,7 +193,30 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
       if (verplaatst.length) regels.push("Andere tijd:", ...verplaatst.map((i) => `${ritRegel(i)}  (was ${hhmm(oud[i.ref].t)})`), "");
       if (weg.length) regels.push("Vervallen of niet meer bij jou:", ...weg.map((ref) => `${hhmm(oud[ref].t)}  ${ref}`), "");
       regels.push(opnieuwBellen ? "Wil je deze passagiers ook even bellen? Tik daarna op Gebeld." : "Voor deze rit hoef je niet meer te bellen.");
-      c.berichten.push(...(await verstuur(chatsVan(driverId), regels.join("\n"), opnieuwBellen ? knop(dag, driverId) : undefined)));
+      c.berichten.push(...(await verstuur(chatsVan(driverId).filter((x) => (c.aan ?? []).includes(x)), regels.join("\n"), opnieuwBellen ? knop(dag, driverId) : undefined)));
+    }
+    await stuurOntbrekende(dag);
+    store.save();
+  }
+
+  /**
+   * Chauffeurs die ná 17:00 (opnieuw) gekoppeld zijn, of bij wie het eerste
+   * bericht niet aankwam: alsnog het eerste bericht met hun open ritten.
+   */
+  async function stuurOntbrekende(dag, alleenDriver = null) {
+    const rec = st().dagen[dag];
+    if (!rec?.verstuurdOp) return;
+    for (const [driverId, c] of Object.entries(rec.chauffeurs)) {
+      if (alleenDriver && driverId !== alleenDriver) continue;
+      c.aan ??= [];
+      const nieuweChats = chatsVan(driverId).filter((x) => !c.aan.includes(x));
+      const items = Object.entries(c.ritten)
+        .filter(([, r]) => !r.gebeld)
+        .map(([ref, r]) => ({ ref, t: r.t, van: r.van ?? null, naar: r.naar ?? null, vlucht: r.vlucht ?? null }))
+        .sort((a, b) => a.t - b.t);
+      if (!nieuweChats.length || !items.length) continue;
+      c.berichten.push(...(await verstuur(nieuweChats, eersteTekst(dag, items), knop(dag, driverId))));
+      c.aan.push(...nieuweChats);
     }
     store.save();
   }
@@ -381,6 +409,8 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
         if (admin === chatId) continue; // je eigen koppeling hoef je niet te controleren
         await veilig(() => send(admin, melding, { reply_markup: { inline_keyboard: [[{ text: "Ongedaan maken", callback_data: `ontkoppel:${chatId}` }]] } }), "bericht aan beheer");
       }
+      const m = minuutVanDag(now());
+      if (m >= T.eerst && m <= T.laatst) await stuurOntbrekende(addDays(amsterdamYmd(now()), 1), id);
       return `Gekoppeld als ${naam}`;
     }
 

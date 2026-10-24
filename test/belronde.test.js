@@ -322,3 +322,26 @@ test("keuzelijst: alleen actieve chauffeurs, met 'staat er niet bij' voor de hel
   // een chauffeur mag niet ontkoppelen
   assert.equal(await bel.knopGedrukt({ id: "d", data: "ontkoppel:1", message: { chat: { id: 60 }, message_id: 3, text: "" } }), null);
 });
+
+test("koppelen ná 17:00: het eerste bericht komt alsnog, meteen", async () => {
+  const s = setup({ chats: { "1": { toegelaten: true, naam: "Hans", driverId: null }, "70": { toegelaten: true, naam: "Kees", koppelGevraagd: "x" } } });
+  await s.at(om("17:00"));
+  assert.equal(s.aan(70).length, 0);
+  await s.at(om("18:29"));
+  await s.bel.knopGedrukt({ id: "k", data: `ikben:${KEES}`, message: { chat: { id: 70 }, message_id: 5, text: "" } });
+  const m = s.aan(70).at(-1);
+  assert.match(m.text, /Morgen \(zondag 25 oktober\) heb je 1 rit/);
+  assert.match(m.text, /11:00  WNT-4  Nuenen → Schiphol/);
+  assert.ok(m.extra.reply_markup);
+  // niet nog eens bij de volgende controle
+  await s.at(om("19:00"));
+  assert.equal(s.aan(70).filter((x) => /Morgen/.test(x.text)).length, 1);
+});
+
+test("koppeling ná 17:00 via de andere weg (bv. hersteld): halfuurcontrole stuurt alsnog", async () => {
+  const s = setup({ chats: { "1": { toegelaten: true, naam: "Hans", driverId: null }, "70": { toegelaten: true, naam: "Kees", koppelGevraagd: "x" } } });
+  await s.at(om("17:00"));
+  s.state.chats["70"].driverId = KEES;
+  await s.at(om("17:30"));
+  assert.match(s.aan(70).at(-1).text, /11:00  WNT-4/);
+});

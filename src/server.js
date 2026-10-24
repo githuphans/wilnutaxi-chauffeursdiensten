@@ -101,6 +101,15 @@ server.listen(PORT, "0.0.0.0", () => console.log(`Chauffeursdiensten draait op p
 
 // --- Vluchtbot -------------------------------------------------------------
 if (env.TELEGRAM_BOT_TOKEN) {
+  // Bij een nieuwe deploy draait de oude versie nog even door en bewaart bij
+  // het afsluiten zijn laatste stand (bv. een koppeling van net). Daarom laadt
+  // de nieuwe versie de opslag pas na even wachten; anders gaat die wijziging
+  // verloren. In die tijd beantwoordt de oude versie de berichten nog.
+  const wacht = Math.max(0, Number(env.BOT_START_WACHT_SECONDEN ?? 90));
+  if (wacht) {
+    console.log(`Vluchtbot start over ${wacht} s (oude versie eerst laten afsluiten).`);
+    await new Promise((r) => setTimeout(r, wacht * 1000));
+  }
   const store = createStore();
   await store.load();
   const telegram = createTelegram();
