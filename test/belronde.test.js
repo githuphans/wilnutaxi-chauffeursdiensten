@@ -223,6 +223,7 @@ test("chauffeursnaam herkennen in verschillende vormen", async () => {
   const { driverNaam } = await import("../src/taxiid.js");
   assert.equal(driverNaam({ firstName: "Piet", lastName: "Jansen" }), "Piet Jansen");
   assert.equal(driverNaam({ first_name: "Piet" }), "Piet");
+  assert.equal(driverNaam({ fname: "Ronald", lname: "de Vries", phoneNumber: "06", companyId: "x" }), "Ronald de Vries"); // zo geeft taxiID het (24-10-2026)
   assert.equal(driverNaam({ id: "x", profile: { name: "Kees Bakker" } }), "Kees Bakker");
   assert.equal(driverNaam({ user: { givenName: "Ronald", familyName: "de Vries" } }), "Ronald de Vries");
   assert.equal(driverNaam({ company: { name: "Wilnu Taxi" }, person: { voornaam: "Han" } }), "Han");

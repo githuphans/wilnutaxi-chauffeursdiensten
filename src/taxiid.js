@@ -236,8 +236,8 @@ export function createTaxiIdClient({
  * `user`, `profile` of `person`) naar voornaam/achternaam of een hele naam.
  * Objecten over voertuig, bedrijf, bank of noodcontact worden overgeslagen.
  */
-const VOOR = /^(first|given|voor)[_-]?(name|naam)$|^voornaam$/i;
-const ACHTER = /^(last|family|sur|achter)[_-]?(name|naam)$|^achternaam$/i;
+const VOOR = /^(first|given|voor)[_-]?(name|naam)$|^voornaam$|^fname$/i;
+const ACHTER = /^(last|family|sur|achter)[_-]?(name|naam)$|^achternaam$|^lname$/i;
 const HEEL = /^(full[_-]?name|display[_-]?name|name|naam|nick[_-]?name|roepnaam|call[_-]?name)$/i;
 const OVERSLAAN = /vehicle|company|car$|^auto|bedrijf|bank|account|emergency|nood|iban|invoice|factuur/i;
 export function driverNaam(d) {
