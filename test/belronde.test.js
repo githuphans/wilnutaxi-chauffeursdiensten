@@ -218,3 +218,46 @@ test("BEL_HERINNERING=uit zet alles uit", async () => {
   assert.equal(s.sent.length, 0);
   assert.equal(s.fetches(), 0);
 });
+
+test("chauffeursnaam herkennen in verschillende vormen", async () => {
+  const { driverNaam } = await import("../src/taxiid.js");
+  assert.equal(driverNaam({ firstName: "Piet", lastName: "Jansen" }), "Piet Jansen");
+  assert.equal(driverNaam({ first_name: "Piet" }), "Piet");
+  assert.equal(driverNaam({ id: "x", profile: { name: "Kees Bakker" } }), "Kees Bakker");
+  assert.equal(driverNaam({ user: { givenName: "Ronald", familyName: "de Vries" } }), "Ronald de Vries");
+  assert.equal(driverNaam({ company: { name: "Wilnu Taxi" }, person: { voornaam: "Han" } }), "Han");
+  assert.equal(driverNaam({ activeVehicle: { name: "Mercedes" } }), null);
+});
+
+test("namen onbekend: overzicht noemt de eerste rit en niemand wordt 'gekoppeld-gevraagd'", async () => {
+  const s = setup({ chats: { "1": { toegelaten: true, naam: "Hans" } } });
+  s.bel; // namen weghalen
+  const handleZonderNamen = s.handle;
+  // taxiID geeft geen namen terug
+  const { createBelronde } = await import("../src/belronde.js");
+  const state = s.state;
+  const bel = createBelronde({
+    store: { state, save() {} },
+    taxiId: {
+      async getUpcomingRides() {
+        return { rides: [rit("WNT-1", morgen("07:15"), RONALD), rit("WNT-2", morgen("10:00"), RONALD)], fetchedAt: Date.now(), stale: false };
+      },
+      async getDriver(id) {
+        return { id, naam: null, velden: ["id", "activeVehicleId", "contact.label"] };
+      },
+      async listDrivers() {
+        return null;
+      },
+    },
+    send: async () => ({ message_id: 1 }),
+    env: { BOT_BEHEER_CHAT_IDS: "1" },
+    now: () => om("09:00"),
+    log: { warn() {}, info() {} },
+  });
+  const stand = await bel.stand();
+  assert.match(stand, /❓ Onbekende chauffeur \(eerste rit 07:15 WNT-1\): 2 ritten/);
+  assert.match(stand, /Velden bij een chauffeur in taxiID .*activeVehicleId, contact\.label/);
+  assert.equal(typeof (await bel.koppelVraag("1")), "string");
+  assert.equal(state.chats["1"].koppelGevraagd, undefined); // later opnieuw proberen
+  assert.ok(handleZonderNamen);
+});

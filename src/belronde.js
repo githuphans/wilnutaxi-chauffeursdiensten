@@ -91,11 +91,13 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     for (const id of admins) await veilig(() => send(id, tekst), "bericht aan beheer");
   };
 
+  let laatsteVelden = null;
   async function naamVan(driverId) {
     const gekoppeld = Object.values(chats()).find((c) => c.driverId === driverId && c.driverNaam);
     if (gekoppeld) return gekoppeld.driverNaam;
     const d = await veilig(() => taxiId.getDriver?.(driverId), "chauffeursnaam ophalen");
-    return d?.naam ?? `chauffeur …${driverId.slice(-4)}`;
+    if (!d?.naam && d?.velden) laatsteVelden = d.velden;
+    return d?.naam ?? null;
   }
 
   async function haalRitten(t) {
@@ -210,8 +212,11 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     const lijst = Object.entries(rec.chauffeurs).filter(([, c]) => Object.keys(c.ritten).length);
     if (!lijst.length && !rec.zonderChauffeur?.length) return `${regels[0]}\nGeen ritten.`;
     lijst.sort(([, a], [, b]) => Math.min(...Object.values(a.ritten).map((r) => r.t)) - Math.min(...Object.values(b.ritten).map((r) => r.t)));
-    for (const [driverId, c] of lijst) {
+    for (let [driverId, c] of lijst) {
       const alle = Object.values(c.ritten);
+      const eerste = Object.entries(c.ritten).sort(([, a], [, b]) => a.t - b.t)[0];
+      // Naam onbekend: eerste rit erbij, dan is de chauffeur in het portaal terug te vinden.
+      c = { ...c, naam: c.naam ?? `Onbekende chauffeur (eerste rit ${hhmm(eerste[1].t)} ${eerste[0]})` };
       const open = alle.filter((r) => !r.gebeld).length;
       if (!chatsVan(driverId).length) regels.push(`❓ ${c.naam}: ${ritten(alle.length)}, niet gekoppeld aan de bot`);
       else if (!open) regels.push(`✅ ${c.naam}: ${ritten(alle.length)}, gebeld${c.gebeldOp ? ` (${hhmm(c.gebeldOp)})` : ""}`);
@@ -239,10 +244,10 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
       for (const id of ids) lijst.push({ id, naam: await naamVan(id) });
     }
     lijst = lijst.filter((d) => d.id && d.naam).sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
+    if (!lijst.length) return "Ik kan de chauffeurs uit taxiID nu niet ophalen. Probeer het later opnieuw met /ikben.";
     const c = chats()[String(chatId)];
     if (c) c.koppelGevraagd = new Date(now()).toISOString();
     store.save();
-    if (!lijst.length) return "Ik kan de chauffeurs uit taxiID nu niet ophalen. Probeer het later opnieuw met /ikben.";
     const rijen = lijst.slice(0, 40).map((d) => [{ text: d.naam, callback_data: `ikben:${d.id}` }]);
     rijen.push([{ text: "Ik rijd zelf geen ritten", callback_data: "ikben:geen" }]);
     return {
@@ -287,7 +292,7 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
         await veilig(() => editText(chatId, cb.message.message_id, "Oké, je krijgt geen belherinnering. Toch wel? Stuur /ikben."), "bericht bijwerken");
         return "Genoteerd";
       }
-      const naam = await naamVan(id);
+      const naam = (await naamVan(id)) ?? "chauffeur";
       const anderen = chatsVan(id).filter((x) => x !== chatId);
       c.driverId = id;
       c.driverNaam = naam;
@@ -335,7 +340,11 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     const { per, zonder } = rittenPerChauffeur(rides, dag);
     const voorproef = { chauffeurs: {}, zonderChauffeur: zonder };
     for (const [id, items] of per) voorproef.chauffeurs[id] = { naam: await naamVan(id), ritten: Object.fromEntries(items.map((i) => [i.ref, { t: i.t, gebeld: false }])) };
-    return `Nog niet verstuurd (dat gebeurt om ${tijdTekst(T.eerst)}).\n${overzichtTekst(dag, voorproef)}`;
+    let tekst = `Nog niet verstuurd (dat gebeurt om ${tijdTekst(T.eerst)}).\n${overzichtTekst(dag, voorproef)}`;
+    if (Object.values(voorproef.chauffeurs).some((c) => !c.naam)) {
+      tekst += `\n\nℹ️ Ik herken de chauffeursnamen uit taxiID nog niet, dus chauffeurs kunnen zich nog niet koppelen.${laatsteVelden ? ` Velden bij een chauffeur in taxiID (alleen namen, geen inhoud): ${laatsteVelden.join(", ")}` : ""}`;
+    }
+    return tekst;
   }
 
   function koppelingen() {

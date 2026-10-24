@@ -178,7 +178,10 @@ export function createTaxiIdClient({
         headers: { Authorization: apiKey, "Content-Type": "application/json" },
         signal: controller.signal,
       }).finally(() => clearTimeout(timer));
-      if (res.ok) value = { id: driverId, naam: driverNaam(await res.json()) };
+      if (res.ok) {
+        const body = await res.json();
+        value = { id: driverId, naam: driverNaam(body), velden: veldnamen(body) };
+      }
       else log.warn?.(`Chauffeur opzoeken in taxiID: HTTP ${res.status}`);
     } catch (err) {
       log.warn?.(`Chauffeur opzoeken in taxiID mislukt: ${err.message}`);
@@ -227,19 +230,48 @@ export function createTaxiIdClient({
   return { getUpcomingRides, fetchRidesBetween, getVehicle, getActiveVehicleId, getDriver, listDrivers };
 }
 
-/** Naam uit een taxiID-chauffeur (veldnamen zijn niet overal gelijk). */
+/**
+ * Naam uit een taxiID-chauffeur. De veldnamen zijn niet gedocumenteerd, dus
+ * we zoeken laag voor laag (eerst het object zelf, dan geneste objecten zoals
+ * `user`, `profile` of `person`) naar voornaam/achternaam of een hele naam.
+ * Objecten over voertuig, bedrijf, bank of noodcontact worden overgeslagen.
+ */
+const VOOR = /^(first|given|voor)[_-]?(name|naam)$|^voornaam$/i;
+const ACHTER = /^(last|family|sur|achter)[_-]?(name|naam)$|^achternaam$/i;
+const HEEL = /^(full[_-]?name|display[_-]?name|name|naam|nick[_-]?name|roepnaam|call[_-]?name)$/i;
+const OVERSLAAN = /vehicle|company|car$|^auto|bedrijf|bank|account|emergency|nood|iban|invoice|factuur/i;
 export function driverNaam(d) {
   if (!d || typeof d !== "object") return null;
-  const s = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
-  const bron = d.user && typeof d.user === "object" ? [d, d.user] : [d];
-  for (const o of bron) {
-    const voor = s(o.firstName) ?? s(o.firstname) ?? s(o.first_name);
-    const achter = s(o.lastName) ?? s(o.lastname) ?? s(o.last_name);
-    if (voor || achter) return [voor, achter].filter(Boolean).join(" ");
-    const heel = s(o.fullName) ?? s(o.name) ?? s(o.displayName);
+  const tekst = (v) => (typeof v === "string" && v.trim() && v.trim().length <= 60 ? v.trim() : null);
+  let laag = [d];
+  for (let diepte = 0; diepte < 3 && laag.length; diepte++) {
+    let heel = null;
+    const volgende = [];
+    for (const o of laag) {
+      let voor = null, achter = null;
+      for (const [k, v] of Object.entries(o)) {
+        if (VOOR.test(k)) voor ??= tekst(v);
+        else if (ACHTER.test(k)) achter ??= tekst(v);
+        else if (HEEL.test(k)) heel ??= tekst(v);
+        else if (v && typeof v === "object" && !Array.isArray(v) && !OVERSLAAN.test(k)) volgende.push(v);
+      }
+      if (voor || achter) return [voor, achter].filter(Boolean).join(" ");
+    }
     if (heel) return heel;
+    laag = volgende;
   }
   return null;
+}
+
+/** Alleen de veldnamen (geen waarden), om te zien waar taxiID de naam zet. */
+export function veldnamen(d, pad = "", diepte = 0, uit = []) {
+  if (!d || typeof d !== "object" || Array.isArray(d) || diepte > 1) return uit;
+  for (const [k, v] of Object.entries(d)) {
+    const p = pad ? `${pad}.${k}` : k;
+    if (v && typeof v === "object" && !Array.isArray(v) && diepte < 1) veldnamen(v, p, diepte + 1, uit);
+    else uit.push(p);
+  }
+  return uit;
 }
 
 /** Chauffeur-id van een rit (taxiID geeft meestal `driverId`). */
