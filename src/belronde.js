@@ -246,7 +246,11 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
       // Naam onbekend: eerste rit erbij, dan is de chauffeur in het portaal terug te vinden.
       c = { ...c, naam: c.naam ?? `Onbekende chauffeur (eerste rit ${hhmm(eerste[1].t)} ${eerste[0]})` };
       const open = alle.filter((r) => !r.gebeld).length;
-      if (!chatsVan(driverId).length) regels.push(`❓ ${c.naam}: ${ritten(alle.length)}, niet gekoppeld aan de bot`);
+      const naamgenoten = !chatsVan(driverId).length && c.naam
+        ? Object.entries(chats()).filter(([, x]) => x.toegelaten && x.driverId && x.driverId !== driverId && x.driverNaam === c.naam).map(([id]) => id)
+        : [];
+      if (naamgenoten.length) regels.push(`⚠️ ${c.naam}: ${ritten(alle.length)}, maar chat ${naamgenoten.join(", ")} is gekoppeld aan een ándere ${c.naam} in taxiID (dubbel account?). Laat hem /ikben opnieuw doen.`);
+      else if (!chatsVan(driverId).length) regels.push(`❓ ${c.naam}: ${ritten(alle.length)}, niet gekoppeld aan de bot`);
       else if (!open) regels.push(`✅ ${c.naam}: ${ritten(alle.length)}, gebeld${c.gebeldOp ? ` (${hhmm(c.gebeldOp)})` : ""}`);
       else regels.push(`⏳ ${c.naam}: ${ritten(alle.length)}, ${open === alle.length ? "nog niet afgevinkt" : `${open} nog niet afgevinkt`}`);
     }

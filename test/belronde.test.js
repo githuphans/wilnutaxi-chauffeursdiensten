@@ -345,3 +345,10 @@ test("koppeling ná 17:00 via de andere weg (bv. hersteld): halfuurcontrole stuu
   await s.at(om("17:30"));
   assert.match(s.aan(70).at(-1).text, /11:00  WNT-4/);
 });
+
+test("overzicht: gekoppeld aan een ander taxiID-account met dezelfde naam", async () => {
+  const s = setup({ chats: { "1": { toegelaten: true, naam: "Hans", driverId: null }, "80": { toegelaten: true, naam: "Ronald", driverId: "oudaccount00000000000001", driverNaam: "Ronald de Vries" } } });
+  await s.at(om("17:00"));
+  await s.at(om("20:00"));
+  assert.match(s.aan(1).at(-1).text, /⚠️ Ronald de Vries: 2 ritten, maar chat 80 is gekoppeld aan een ándere Ronald de Vries/);
+});
