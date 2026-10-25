@@ -121,13 +121,24 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     ].join("\n");
   }
 
+  let laatsteFouten = [];
   async function verstuur(chatIds, tekst, extra) {
     const berichten = [];
     for (const chatId of chatIds) {
-      const m = await veilig(() => send(chatId, tekst, extra), `bericht aan chat ${chatId}`);
-      if (m?.message_id) berichten.push({ chatId, messageId: m.message_id });
+      try {
+        const m = await send(chatId, tekst, extra);
+        if (m?.message_id) berichten.push({ chatId, messageId: m.message_id });
+      } catch (err) {
+        log.warn?.(`Belherinnering: bericht aan chat ${chatId} mislukt: ${err.message}`);
+        laatsteFouten.push({ chatId, fout: err.message });
+      }
     }
     return berichten;
+  }
+  const kortId = (id) => `…${String(id).slice(-4)}`;
+  const datumTijd = (t) => `${amsterdamYmd(t).slice(8, 10)}-${amsterdamYmd(t).slice(5, 7)} ${hhmm(t)}`;
+  function logKoppeling(c, op, driverId = null) {
+    c.koppelLog = [...(c.koppelLog ?? []), { op, driverId, t: new Date(now()).toISOString() }].slice(-10);
   }
 
   // --- 17:00: eerste ronde ----------------------------------------------------
@@ -146,6 +157,7 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     }
     const { per, zonder } = rittenPerChauffeur(rides, dag);
     const rec = (st().dagen[dag] = { verstuurdOp: new Date(t).toISOString(), laatsteCheck: t, chauffeurs: {}, zonderChauffeur: zonder.map(({ ref, t }) => ({ ref, t })) });
+    const rapport = [];
     for (const [driverId, items] of per) {
       const c = (rec.chauffeurs[driverId] = {
         naam: await naamVan(driverId),
@@ -155,10 +167,19 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
         aan: [],
       });
       const aan = chatsVan(driverId);
+      laatsteFouten = [];
       c.berichten.push(...(await verstuur(aan, eersteTekst(dag, items), knop(dag, driverId))));
-      c.aan.push(...aan);
+      const gelukt = aan.filter((x) => !laatsteFouten.some((f) => f.chatId === x));
+      c.aan.push(...gelukt);
+      const wie = `${c.naam ?? "Onbekende chauffeur"} (${ritten(items.length)}, account ${kortId(driverId)})`;
+      if (gelukt.length) rapport.push(`✔ ${wie} → chat ${gelukt.join(", ")}`);
+      if (!aan.length) rapport.push(`✖ ${wie}: geen chat gekoppeld aan dit taxiID-account`);
+      for (const f of laatsteFouten) rapport.push(`✖ ${wie}: Telegram weigerde het bericht aan chat ${f.chatId} (${f.fout})`);
     }
     store.save();
+    if (rapport.length && !/^(uit|nee|0|false|off)$/i.test(String(env.BEL_VERZENDRAPPORT ?? "aan"))) {
+      await naarBeheer([`📤 Belherinnering voor ${dayLabel(dag)} verstuurd:`, ...rapport].join("\n"));
+    }
     log.info?.(`Belherinnering ${dag}: ${per.size} chauffeurs, ${zonder.length} ritten zonder chauffeur.`);
   }
 
@@ -332,6 +353,7 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     const was = c.driverNaam ?? "niemand";
     delete c.driverId;
     delete c.driverNaam;
+    logKoppeling(c, "ontkoppeld door beheer");
     store.save();
     const vraag = await koppelVraag(doelChatId);
     if (typeof vraag === "object") {
@@ -391,6 +413,7 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
       if (id === "geen") {
         c.driverId = null;
         c.driverNaam = null;
+        logKoppeling(c, "rijdt geen ritten");
         store.save();
         await veilig(() => editText(chatId, cb.message.message_id, "Oké, je krijgt geen belherinnering. Toch wel? Stuur /ikben."), "bericht bijwerken");
         return "Genoteerd";
@@ -399,6 +422,7 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
       const anderen = chatsVan(id).filter((x) => x !== chatId);
       c.driverId = id;
       c.driverNaam = naam;
+      logKoppeling(c, "gekoppeld", id);
       store.save();
       await veilig(
         () => editText(chatId, cb.message.message_id, `Gekoppeld als ${naam}. Elke middag om ${tijdTekst(T.eerst)} krijg je je ritten van morgen. Verkeerde naam? Stuur /ikben.`),
@@ -460,13 +484,28 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     return tekst;
   }
 
-  function koppelingen() {
+  async function koppelingen() {
     const lijst = Object.entries(chats()).filter(([, c]) => c.toegelaten);
     if (!lijst.length) return "Nog niemand.";
+    // Hoeveel ritten de komende 7 dagen op het gekoppelde taxiID-account staan.
+    const r = await veilig(() => taxiId.getUpcomingRides(), "ritten ophalen");
+    const aantal = new Map();
+    for (const rit of r?.rides ?? []) {
+      const d = driverIdOf(rit);
+      if (d && !isCanceled(rit) && Date.parse(rit.requestedDate) >= now()) aantal.set(d, (aantal.get(d) ?? 0) + 1);
+    }
     return lijst
-      .map(([id, c]) => `• ${c.naam || "(geen naam)"} (${id}): ${c.driverId ? c.driverNaam ?? c.driverId : c.driverId === null ? "rijdt geen ritten" : "nog niet gekoppeld"}`)
+      .map(([id, c]) => {
+        const kop = `• ${c.naam || "(geen naam)"} (${id}): `;
+        if (c.driverId === null) return `${kop}rijdt geen ritten`;
+        if (!c.driverId) return `${kop}nog niet gekoppeld`;
+        const laatste = [...(c.koppelLog ?? [])].reverse().find((x) => x.op === "gekoppeld");
+        const extra = [`account ${kortId(c.driverId)}`, laatste ? `sinds ${datumTijd(laatste.t)}` : null, r ? `${aantal.get(c.driverId) ?? 0} ritten komende dagen` : null].filter(Boolean).join(", ");
+        return `${kop}${c.driverNaam ?? c.driverId} [${extra}]`;
+      })
       .join("\n");
   }
+
 
   // --- elke minuut ------------------------------------------------------------------
   let bezig = false;

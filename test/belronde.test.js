@@ -112,7 +112,7 @@ test("om 17:00 krijgt elke gekoppelde chauffeur zijn ritten, zonder klantgegeven
   assert.ok(!JSON.stringify(s.state).match(/Geheim|0612345678/));
   // geen dubbel bericht in de volgende minuut
   await s.at(om("17:01"));
-  assert.equal(s.sent.length, 2);
+  assert.equal(s.sent.length, 3); // 2 chauffeurs + verzendrapport voor beheer
 });
 
 test("op Gebeld tikken: genoteerd, bericht bijgewerkt en niet meer herinnerd", async () => {
@@ -351,4 +351,44 @@ test("overzicht: gekoppeld aan een ander taxiID-account met dezelfde naam", asyn
   await s.at(om("17:00"));
   await s.at(om("20:00"));
   assert.match(s.aan(1).at(-1).text, /⚠️ Ronald de Vries: 2 ritten, maar chat 80 is gekoppeld aan een ándere Ronald de Vries/);
+});
+
+test("om 17:00 krijgt beheer een verzendrapport, ook bij mislukte berichten", async () => {
+  const s = setup({ chats: structuredClone(gekoppeld) });
+  await s.at(om("17:00"));
+  const r = s.aan(1).find((m) => /📤/.test(m.text)).text;
+  assert.match(r, /✔ Ronald de Vries \(2 ritten, account …0001\) → chat 10/);
+  assert.match(r, /✔ Piet Jansen \(1 rit, account …0002\) → chat 20/);
+  assert.match(r, /✖ Kees Bakker \(1 rit, account …0003\): geen chat gekoppeld/);
+});
+
+test("verzendrapport meldt een weigering van Telegram", async () => {
+  const { createBelronde } = await import("../src/belronde.js");
+  const state = emptyState();
+  Object.assign(state.chats, { "1": { toegelaten: true, naam: "Hans", driverId: null }, "10": { toegelaten: true, naam: "Ronald", driverId: RONALD, driverNaam: "Ronald de Vries" } });
+  const sent = [];
+  const bel = createBelronde({
+    store: { state, save() {} },
+    taxiId: { async getUpcomingRides() { return { rides: [rit("WNT-1", morgen("07:15"), RONALD)], fetchedAt: Date.now(), stale: false }; }, async getDriver(id) { return { id, naam: "x" }; } },
+    send: async (chatId, text) => {
+      if (String(chatId) === "10") throw new Error("Telegram sendMessage: Forbidden: bot was blocked by the user");
+      sent.push(text);
+      return { message_id: 1 };
+    },
+    env: { BOT_BEHEER_CHAT_IDS: "1" },
+    now: () => om("17:00"),
+    log: { warn() {}, info() {} },
+  });
+  await bel.tick();
+  assert.match(sent.at(-1), /✖ Ronald de Vries .*Telegram weigerde het bericht aan chat 10 \(.*blocked/);
+  // later opnieuw proberen
+  assert.deepEqual(state.bel.dagen["2026-10-25"].chauffeurs[RONALD].aan, []);
+});
+
+test("/koppelingen toont account, sinds wanneer en aantal ritten", async () => {
+  const s = setup({ chats: { "1": { toegelaten: true, naam: "Hans", driverId: null }, "30": { toegelaten: true, naam: "Piet" } } });
+  await s.bel.knopGedrukt({ id: "k", data: `ikben:${PIET}`, message: { chat: { id: 30 }, message_id: 5, text: "" } });
+  const k = await s.bel.koppelingen();
+  assert.match(k, /Piet \(30\): Piet Jansen \[account …0002, sinds 24-10 16:00, 2 ritten komende dagen\]/);
+  assert.match(k, /Hans \(1\): rijdt geen ritten/);
 });

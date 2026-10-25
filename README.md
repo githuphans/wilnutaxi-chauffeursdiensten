@@ -78,12 +78,16 @@ alleen ritreferentie, tijd, plaatsnaam en vluchtnummer.
 - **Tot 21:30** (`BEL_LAATST_TIJD`) wordt elk half uur gekeken of er ritten
   bij zijn gekomen, verplaatst of vervallen; de chauffeur krijgt dan een
   extra bericht (bij nieuwe of verplaatste ritten weer met de knop).
+- Direct na 17:00 krijgt beheer een **verzendrapport**: per chauffeur aan
+  welke chat het bericht ging, wie geen gekoppelde chat heeft, en of Telegram
+  een bericht weigerde (bv. bot geblokkeerd). Uitzetten: `BEL_VERZENDRAPPORT=uit`.
 - **19:30** (`BEL_NOGMAALS_TIJD`): herinnering voor wie nog niet heeft afgevinkt.
 - **20:00** (`BEL_OVERZICHT_TIJD`): overzicht voor `BOT_BEHEER_CHAT_IDS`:
   ✅ gebeld, ⏳ nog niet afgevinkt, ❓ chauffeur niet gekoppeld aan de bot,
   ⚠️ ritten zonder chauffeur.
 - Beheer: `/belronde` (stand voor morgen; vóór 17:00 een voorproef),
-  `/koppelingen` (welke chat bij welke chauffeur hoort).
+  `/koppelingen` (welke chat bij welke chauffeur hoort, met het taxiID-account,
+  sinds wanneer en hoeveel ritten de komende dagen op dat account staan).
 - Uitzetten: `BEL_HERINNERING=uit`.
 - Proberen zonder iets te versturen: `npm run bellen` (of
   `npm run bellen -- 2026-10-26`).
