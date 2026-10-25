@@ -346,11 +346,40 @@ test("koppeling ná 17:00 via de andere weg (bv. hersteld): halfuurcontrole stuu
   assert.match(s.aan(70).at(-1).text, /11:00  WNT-4/);
 });
 
-test("overzicht: gekoppeld aan een ander taxiID-account met dezelfde naam", async () => {
-  const s = setup({ chats: { "1": { toegelaten: true, naam: "Hans", driverId: null }, "80": { toegelaten: true, naam: "Ronald", driverId: "oudaccount00000000000001", driverNaam: "Ronald de Vries" } } });
+test("dubbel taxiID-account met dezelfde naam: chauffeur krijgt toch zijn bericht (Ronald, 24-10)", async () => {
+  const s = setup({ chats: { "1": { toegelaten: true, naam: "Hans", driverId: null }, "80": { toegelaten: true, naam: "Ronald", driverId: "oudaccount00000000049f3", driverNaam: "Ronald de Vries" } } });
   await s.at(om("17:00"));
+  assert.match(s.aan(80).at(-1).text, /Morgen .* heb je 2 ritten/);
+  assert.match(s.aan(1).find((m) => /📤/.test(m.text)).text, /✔ Ronald de Vries \(2 ritten, account …0001\) → chat 80/);
+  // knop werkt ook
+  assert.equal(await s.bel.knopGedrukt({ id: "x", data: `bel:2026-10-25:${RONALD}`, message: { chat: { id: 80 }, message_id: 1, text: "" } }), "Bedankt!");
   await s.at(om("20:00"));
-  assert.match(s.aan(1).at(-1).text, /⚠️ Ronald de Vries: 2 ritten, maar chat 80 is gekoppeld aan een ándere Ronald de Vries/);
+  assert.match(s.aan(1).at(-1).text, /✅ Ronald de Vries: 2 ritten, gebeld/);
+  assert.match(await s.bel.koppelingen(), /Ronald de Vries \[account …49f3, 2 ritten komende dagen \(op account …0001\)\]/);
+});
+
+test("keuzelijst: één knop per naam, het account met ritten", async () => {
+  const { createBelronde } = await import("../src/belronde.js");
+  const state = emptyState();
+  const t0 = om("09:00");
+  const bel = createBelronde({
+    store: { state, save() {} },
+    taxiId: {
+      async listDrivers() { return [{ id: "oud49f3", naam: "Ronald Willems" }, { id: PIET, naam: "Piet Jansen" }]; },
+      async fetchRidesBetween() { return [rit("A", t0 + 86400000, "nieuw1824"), rit("B", t0, PIET), rit("C", t0 - 86400000 * 3, "oud49f3")]; },
+      async getUpcomingRides() { return { rides: [], fetchedAt: t0, stale: false }; },
+      async getDriver(id) { return { id, naam: id === "nieuw1824" ? "Ronald  Willems" : "?" }; },
+    },
+    send: async () => ({ message_id: 1 }),
+    env: {},
+    now: () => t0,
+    log: { warn() {}, info() {} },
+  });
+  const v = await bel.koppelVraag("9");
+  const knoppen = v.reply_markup.inline_keyboard.map((r) => r[0]);
+  const ronald = knoppen.filter((k) => /Ronald/.test(k.text));
+  assert.equal(ronald.length, 1);
+  assert.equal(ronald[0].callback_data, "ikben:oud49f3"); // beide hebben ritten: eerste blijft; koppelen op naam vangt de rest
 });
 
 test("om 17:00 krijgt beheer een verzendrapport, ook bij mislukte berichten", async () => {

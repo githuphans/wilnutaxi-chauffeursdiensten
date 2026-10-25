@@ -77,7 +77,27 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     return store.state.bel;
   };
   const chats = () => store.state.chats;
-  const chatsVan = (driverId) => Object.entries(chats()).filter(([, c]) => c.toegelaten && c.driverId === driverId).map(([id]) => id);
+  /**
+   * Een chauffeur kan in taxiID meer dan één account hebben met dezelfde naam
+   * (gezien bij Ronald, 24-10-2026: gekoppeld aan …49f3, ritten op …1824).
+   * Daarom hoort een chat bij een account als het id gelijk is ÓF de naam.
+   */
+  const naamCache = new Map();
+  const norm = (n) => String(n ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  function naamVanSync(driverId) {
+    if (naamCache.has(driverId)) return naamCache.get(driverId);
+    for (const rec of Object.values(st().dagen)) {
+      const n = rec?.chauffeurs?.[driverId]?.naam;
+      if (n) return n;
+    }
+    return null;
+  }
+  const chatsVan = (driverId) => {
+    const naam = norm(naamVanSync(driverId));
+    return Object.entries(chats())
+      .filter(([, c]) => c.toegelaten && c.driverId && (c.driverId === driverId || (naam && norm(c.driverNaam) === naam)))
+      .map(([id]) => id);
+  };
 
   async function veilig(fn, wat) {
     try {
@@ -97,6 +117,7 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     if (gekoppeld) return gekoppeld.driverNaam;
     const d = await veilig(() => taxiId.getDriver?.(driverId), "chauffeursnaam ophalen");
     if (!d?.naam && d?.velden) laatsteVelden = d.velden;
+    if (d?.naam) naamCache.set(driverId, d.naam);
     return d?.naam ?? null;
   }
 
@@ -314,6 +335,22 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
       for (const id of ids) lijst.push({ id, naam: await naamVan(id) });
     }
     lijst = lijst.filter((d) => d.id && d.naam);
+    for (const d of lijst) naamCache.set(d.id, d.naam);
+    // Accounts die wel ritten hebben maar niet in de chauffeurslijst staan.
+    const actiefIds = await actieveChauffeurIds();
+    for (const id of actiefIds ?? []) {
+      if (lijst.some((d) => d.id === id)) continue;
+      const naam = await naamVan(id);
+      if (naam) lijst.push({ id, naam });
+    }
+    // Zelfde naam twee keer (dubbel account): één knop, bij voorkeur het account met ritten.
+    const perNaam = new Map();
+    for (const d of lijst) {
+      const k = norm(d.naam);
+      const al = perNaam.get(k);
+      if (!al || (!actiefIds?.has(al.id) && actiefIds?.has(d.id))) perNaam.set(k, d);
+    }
+    lijst = [...perNaam.values()];
     let ingekort = false;
     if (!alle) {
       const actief = await actieveChauffeurIds();
@@ -447,7 +484,7 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     const [, dag, driverId] = m;
     const rec = st().dagen[dag]?.chauffeurs?.[driverId];
     if (!rec) return "Deze herinnering is verlopen.";
-    if (c.driverId !== driverId && !isAdmin(chatId)) return "Dit is niet jouw herinnering.";
+    if (!chatsVan(driverId).includes(chatId) && !isAdmin(chatId)) return "Dit is niet jouw herinnering.";
     for (const r of Object.values(rec.ritten)) r.gebeld = true;
     rec.gebeldOp = new Date(now()).toISOString();
     store.save();
@@ -494,13 +531,22 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
       const d = driverIdOf(rit);
       if (d && !isCanceled(rit) && Date.parse(rit.requestedDate) >= now()) aantal.set(d, (aantal.get(d) ?? 0) + 1);
     }
+    for (const d of aantal.keys()) await naamVan(d);
     return lijst
       .map(([id, c]) => {
         const kop = `• ${c.naam || "(geen naam)"} (${id}): `;
         if (c.driverId === null) return `${kop}rijdt geen ritten`;
         if (!c.driverId) return `${kop}nog niet gekoppeld`;
         const laatste = [...(c.koppelLog ?? [])].reverse().find((x) => x.op === "gekoppeld");
-        const extra = [`account ${kortId(c.driverId)}`, laatste ? `sinds ${datumTijd(laatste.t)}` : null, r ? `${aantal.get(c.driverId) ?? 0} ritten komende dagen` : null].filter(Boolean).join(", ");
+        // Ook ritten op een ander account met dezelfde naam tellen mee.
+        const ids = [...aantal.keys()].filter((d) => d === c.driverId || (c.driverNaam && norm(naamVanSync(d)) === norm(c.driverNaam)));
+        const totaal = ids.reduce((n, d) => n + aantal.get(d), 0);
+        const anderAccount = ids.filter((d) => d !== c.driverId);
+        const extra = [
+          `account ${kortId(c.driverId)}`,
+          laatste ? `sinds ${datumTijd(laatste.t)}` : null,
+          r ? `${totaal} ritten komende dagen${anderAccount.length ? ` (op account ${anderAccount.map(kortId).join(", ")})` : ""}` : null,
+        ].filter(Boolean).join(", ");
         return `${kop}${c.driverNaam ?? c.driverId} [${extra}]`;
       })
       .join("\n");
