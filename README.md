@@ -84,7 +84,9 @@ alleen ritreferentie, tijd, plaatsnaam en vluchtnummer.
 - **19:30** (`BEL_NOGMAALS_TIJD`): herinnering voor wie nog niet heeft afgevinkt.
 - **20:00** (`BEL_OVERZICHT_TIJD`): overzicht voor `BOT_BEHEER_CHAT_IDS`:
   ✅ gebeld, ⏳ nog niet afgevinkt, ❓ chauffeur niet gekoppeld aan de bot,
-  ⚠️ ritten zonder chauffeur.
+  ⚠️ ritten zonder chauffeur. Wie alleen dit overzicht moet krijgen, zonder
+  beheerrechten of andere meldingen (bv. een collega): zet zijn chat-id in
+  `BEL_OVERZICHT_CHAT_IDS`.
 - Beheer: `/belronde` (stand voor morgen; vóór 17:00 een voorproef),
   `/koppelingen` (welke chat bij welke chauffeur hoort, met het taxiID-account,
   sinds wanneer en hoeveel ritten de komende dagen op dat account staan).

@@ -39,6 +39,8 @@ services:
         type: SECRET
       - key: BOT_BEHEER_CHAT_IDS
         value: ""
+      - key: BEL_OVERZICHT_CHAT_IDS
+        value: ""
       - key: AERODATABOX_API_KEY
         type: SECRET
       - key: AERODATABOX_UNITS_PER_CALL

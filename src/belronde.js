@@ -69,6 +69,8 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     laatst: parseTijd(env.BEL_LAATST_TIJD, "21:30"),
   };
   const admins = String(env.BOT_BEHEER_CHAT_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  // Alleen het overzicht van 20:00, zonder beheerrechten (bv. een collega).
+  const alleenOverzicht = String(env.BEL_OVERZICHT_CHAT_IDS ?? "").split(",").map((s) => s.trim()).filter((id) => id && !admins.includes(id));
   const isAdmin = (chatId) => admins.includes(String(chatId));
 
   const st = () => {
@@ -304,7 +306,9 @@ export function createBelronde({ store, taxiId, send, editText = async () => {},
     const rec = st().dagen[dag];
     rec.overzichtOp = new Date(t).toISOString();
     store.save();
-    await naarBeheer(overzichtTekst(dag, rec));
+    const tekst = overzichtTekst(dag, rec);
+    await naarBeheer(tekst);
+    for (const id of alleenOverzicht) await veilig(() => send(id, tekst), `overzicht aan chat ${id}`);
   }
 
   // --- koppelen: wie ben je? --------------------------------------------------------

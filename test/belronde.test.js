@@ -421,3 +421,15 @@ test("/koppelingen toont account, sinds wanneer en aantal ritten", async () => {
   assert.match(k, /Piet \(30\): Piet Jansen \[account …0002, sinds 24-10 16:00, 2 ritten komende dagen\]/);
   assert.match(k, /Hans \(1\): rijdt geen ritten/);
 });
+
+test("BEL_OVERZICHT_CHAT_IDS krijgt alleen het overzicht van 20:00", async () => {
+  const s = setup({ chats: structuredClone(gekoppeld), env: { BEL_OVERZICHT_CHAT_IDS: "99" } });
+  await s.at(om("17:00"));
+  await s.at(om("19:30"));
+  assert.equal(s.aan(99).length, 0); // geen verzendrapport of herinneringen
+  await s.at(om("20:00"));
+  assert.equal(s.aan(99).length, 1);
+  assert.match(s.aan(99)[0].text, /Belronde voor morgen/);
+  // geen beheerrechten
+  assert.equal(await s.bel.knopGedrukt({ id: "o", data: "ontkoppel:10", message: { chat: { id: 99 }, message_id: 1, text: "" } }), null);
+});
